@@ -111,7 +111,10 @@ const AdminDashboard = () => {
   return (
     <div className="admin-page">
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
-        <h1>Panel de Administración</h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <img src="/logo.png" alt="DEPORTUX" style={{ height: '40px' }} />
+          <h1>Panel de Administración</h1>
+        </div>
         <div style={{ display: 'flex', gap: '1rem' }}>
           <Link to="/" className="btn" style={{ background: 'var(--glass-bg)', color: 'white' }}>Ver Tienda</Link>
           <button onClick={handleLogout} className="btn btn-danger">Cerrar Sesión</button>

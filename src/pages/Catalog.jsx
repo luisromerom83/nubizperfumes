@@ -20,17 +20,7 @@ const Catalog = () => {
         borderBottom: '1px solid var(--glass-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <div style={{ 
-            width: '40px', 
-            height: '40px', 
-            background: 'var(--primary)', 
-            borderRadius: '10px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontWeight: 'bold'
-          }}>T</div>
-          <h2 style={{ fontSize: '1.5rem', fontWeight: '700', letterSpacing: '-0.05em' }}>TIENDA PREMIUM</h2>
+          <img src="/logo.png" alt="DEPORTUX" style={{ height: '40px' }} />
         </div>
         <div></div>
       </header>
