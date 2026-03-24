@@ -135,3 +135,14 @@ h1 {
   font-size: 0.875rem;
   font-weight: 600;
 }
+
+/* ANIMACIONES */
+.fade-out {
+  animation: fadeOutExit 0.5s cubic-bezier(0.19, 1, 0.22, 1) forwards;
+  pointer-events: none;
+}
+
+@keyframes fadeOutExit {
+  0% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(0.9) translateX(50px); filter: blur(10px); }
+}

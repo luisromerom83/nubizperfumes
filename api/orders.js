@@ -15,6 +15,9 @@ export default async function handler(request, response) {
       );
     `;
 
+    // LÍNEA TEMPORAL PARA BORRAR EL HISTORIAL UNA VEZ COMPLETA:
+    // await pool.sql`DELETE FROM orders;`;
+
     // 2. GET: Listar historial
     if (request.method === 'GET') {
       const { rows } = await pool.sql`SELECT * FROM orders ORDER BY created_at DESC;`;
@@ -30,6 +33,13 @@ export default async function handler(request, response) {
         RETURNING *;
       `;
       return response.status(201).json(result.rows[0]);
+    }
+
+    // 4. DELETE: Borrar pedido del historial
+    if (request.method === 'DELETE') {
+      const { id } = request.query;
+      await pool.sql`DELETE FROM orders WHERE id = ${id};`;
+      return response.status(200).json({ message: 'Pedido eliminado' });
     }
 
     return response.status(405).json({ error: 'Método no permitido' });

@@ -21,8 +21,7 @@ const Catalog = () => {
     }
   };
 
-  const stockProducts = products.filter(p => p.type === 'stock' || !p.type);
-  const orderProducts = products.filter(p => p.type === 'order');
+  const categories = ['Adulto', 'Niño'];
 
   return (
     <div className="catalog-page">
@@ -48,35 +47,23 @@ const Catalog = () => {
         </h1>
       </section>
 
-      {/* SECCIÓN EN EXISTENCIA */}
-      {stockProducts.length > 0 && (
-        <section style={{ marginBottom: '4rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.5rem', whiteSpace: 'nowrap' }}>En Existencia</h2>
-            <div style={{ height: '1px', background: 'var(--glass-border)', width: '100%' }}></div>
-          </div>
-          <div className="grid">
-            {stockProducts.map(product => (
-              <ProductCard key={product.id} product={product} onOpenImage={setSelectedImage} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* SECCIÓN BAJO PEDIDO */}
-      {orderProducts.length > 0 && (
-        <section style={{ marginBottom: '4rem' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
-            <h2 style={{ fontSize: '1.5rem', whiteSpace: 'nowrap', color: '#fbbf24' }}>Bajo Pedido</h2>
-            <div style={{ height: '1px', background: 'var(--glass-border)', width: '100%' }}></div>
-          </div>
-          <div className="grid">
-            {orderProducts.map(product => (
-              <ProductCard key={product.id} product={product} isOrder onOpenImage={setSelectedImage} />
-            ))}
-          </div>
-        </section>
-      )}
+      {categories.map(cat => {
+        const catProducts = products.filter(p => (cat === 'Adulto' && (!p.category || p.category === 'Adulto')) || p.category === cat);
+        if (catProducts.length === 0) return null;
+        return (
+          <section key={cat} style={{ marginBottom: '4rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+              <h2 style={{ fontSize: '1.5rem', whiteSpace: 'nowrap', textTransform: 'uppercase', letterSpacing: '2px' }}>{cat}s</h2>
+              <div style={{ height: '1px', background: 'var(--glass-border)', width: '100%' }}></div>
+            </div>
+            <div className="grid">
+              {catProducts.map(product => (
+                <ProductCard key={product.id} product={product} onOpenImage={setSelectedImage} />
+              ))}
+            </div>
+          </section>
+        );
+      })}
 
       {loading && (
         <div style={{ textAlign: 'center', marginTop: '4rem' }}>
@@ -112,43 +99,48 @@ const Catalog = () => {
   );
 };
 
-const ProductCard = ({ product, isOrder, onOpenImage }) => (
-  <div className="glass card">
-    <div style={{ position: 'relative', cursor: 'zoom-in' }} onClick={() => onOpenImage(product.image_url)}>
-      <img src={product.image_url} alt={product.name} className="product-img" />
-      {isOrder && (
+const ProductCard = ({ product, onOpenImage }) => {
+  const isOrder = product.type === 'order';
+  return (
+    <div className="glass card">
+      <div style={{ position: 'relative', cursor: 'zoom-in' }} onClick={() => onOpenImage(product.image_url)}>
+        <img src={product.image_url} alt={product.name} className="product-img" />
         <span className="badge" style={{ 
           position: 'absolute', 
           top: '1rem', 
           left: '1rem',
-          background: '#fbbf24',
-          color: 'black',
-          fontWeight: 'bold'
-        }}>BAJO PEDIDO</span>
-      )}
-      {!isOrder && (
-        <span className="badge" style={{ 
-          position: 'absolute', 
-          top: '1rem', 
-          right: '1rem',
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: 'blur(5px)',
-          color: 'white'
-        }}>Talla {product.size}</span>
-      )}
-    </div>
-    <div className="product-info">
-      <h3 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>{product.name}</h3>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-        <span className="price" style={{ color: isOrder ? '#fbbf24' : 'inherit' }}>
-          {isOrder ? 'Preguntar Precio' : `$${product.price}`}
+          background: isOrder ? '#fbbf24' : '#10b981',
+          color: isOrder ? 'black' : 'white',
+          fontWeight: 'bold',
+          fontSize: '0.65rem'
+        }}>
+          {isOrder ? 'BAJO PEDIDO' : 'EN EXISTENCIA'}
         </span>
-        <button className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
-          {isOrder ? 'Cotizar' : 'Comprar'}
-        </button>
+        {!isOrder && (
+          <span className="badge" style={{ 
+            position: 'absolute', 
+            top: '1rem', 
+            right: '1rem',
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(5px)',
+            color: 'white',
+            fontSize: '0.65rem'
+          }}>Talla {product.size}</span>
+        )}
+      </div>
+      <div className="product-info">
+        <h3 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>{product.name}</h3>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+          <span className="price" style={{ color: isOrder ? '#fbbf24' : 'inherit' }}>
+            {isOrder ? 'Preguntar Precio' : `$${product.price}`}
+          </span>
+          <button className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
+            {isOrder ? 'Cotizar' : 'Comprar'}
+          </button>
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default Catalog;

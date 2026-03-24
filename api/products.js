@@ -14,12 +14,14 @@ export default async function handler(request, response) {
         price DECIMAL(10, 2) NOT NULL,
         image_url TEXT NOT NULL,
         type VARCHAR(50) DEFAULT 'stock',
+        category VARCHAR(50) DEFAULT 'Adulto',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `;
     
-    // Aseguramos columna type
+    // Aseguramos columnas necesarias
     try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'stock';`; } catch (e) {}
+    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Adulto';`; } catch (e) {}
 
     // 2. GET
     if (request.method === 'GET') {
@@ -29,10 +31,10 @@ export default async function handler(request, response) {
 
     // 3. POST (Crear)
     if (request.method === 'POST') {
-      const { name, size, price, imageURL, type } = request.body;
+      const { name, size, price, imageURL, type, category } = request.body;
       const result = await pool.sql`
-        INSERT INTO products (name, size, price, image_url, type)
-        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'})
+        INSERT INTO products (name, size, price, image_url, type, category)
+        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'}, ${category || 'Adulto'})
         RETURNING *;
       `;
       return response.status(201).json(result.rows[0]);
@@ -40,10 +42,10 @@ export default async function handler(request, response) {
 
     // 4. PUT (Actualizar)
     if (request.method === 'PUT') {
-      const { id, name, size, price, imageURL, type } = request.body;
+      const { id, name, size, price, imageURL, type, category } = request.body;
       const result = await pool.sql`
         UPDATE products 
-        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}
+        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}, category = ${category}
         WHERE id = ${id}
         RETURNING *;
       `;
