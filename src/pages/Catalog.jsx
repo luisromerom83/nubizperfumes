@@ -1,26 +1,28 @@
 import { useState, useEffect } from 'react';
-import { db } from '../firebase';
-import { collection, query, orderBy, onSnapshot } from 'firebase/firestore';
 
 const Catalog = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [selectedImage, setSelectedImage] = useState(null);
 
   useEffect(() => {
-    const q = query(collection(db, "products"), orderBy("createdAt", "desc"));
-    
-    // Con onSnapshot, la tienda se actualiza en tiempo real!
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const items = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      }));
-      setProducts(items);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
+    fetchProducts();
   }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch('/api/products');
+      const data = await response.json();
+      setProducts(data);
+      setLoading(false);
+    } catch (error) {
+      console.error("Error al obtener productos:", error);
+      setLoading(false);
+    }
+  };
+
+  const stockProducts = products.filter(p => p.type === 'stock' || !p.type);
+  const orderProducts = products.filter(p => p.type === 'order');
 
   return (
     <div className="catalog-page">
@@ -35,58 +37,118 @@ const Catalog = () => {
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <img src="/logo.png" alt="DEPORTUX" style={{ height: '40px' }} />
         </div>
-        <div></div>
+        <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Elegancia Deportiva</span>
+        </div>
       </header>
 
       <section style={{ marginBottom: '5rem', textAlign: 'center' }}>
-        <h1 style={{ fontSize: '4rem', marginBottom: '1rem' }}>Descubre Estilo <br/> Sin Límites</h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem', maxWidth: '600px', margin: '0 auto' }}>
-          Explora nuestra colección curada de productos exclusivos diseñados para destacar.
-        </p>
+        <h1 style={{ fontSize: 'clamp(2rem, 6vw, 3.5rem)', marginBottom: '1rem', lineHeight: '1.1' }}>
+          Tu Estilo, <br/> Bajo Tus Reglas
+        </h1>
       </section>
 
-      <div className="grid">
-        {products.map(product => (
-          <div key={product.id} className="glass card">
-            <div style={{ position: 'relative' }}>
-              <img src={product.imageURL} alt={product.name} className="product-img" />
-              <span className="badge" style={{ 
-                position: 'absolute', 
-                top: '1rem', 
-                right: '1rem',
-                background: 'rgba(0,0,0,0.5)',
-                backdropFilter: 'blur(5px)',
-                color: 'white'
-              }}>{product.size}</span>
-            </div>
-            <div className="product-info">
-              <h3 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>{product.name}</h3>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
-                <span className="price">${product.price}</span>
-                <button className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.875rem' }}>
-                  Ver más
-                </button>
-              </div>
-            </div>
+      {/* SECCIÓN EN EXISTENCIA */}
+      {stockProducts.length > 0 && (
+        <section style={{ marginBottom: '4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.5rem', whiteSpace: 'nowrap' }}>En Existencia</h2>
+            <div style={{ height: '1px', background: 'var(--glass-border)', width: '100%' }}></div>
           </div>
-        ))}
-      </div>
+          <div className="grid">
+            {stockProducts.map(product => (
+              <ProductCard key={product.id} product={product} onOpenImage={setSelectedImage} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {loading && <p style={{ textAlign: 'center', color: 'var(--text-muted)' }}>Cargando catálogo...</p>}
+      {/* SECCIÓN BAJO PEDIDO */}
+      {orderProducts.length > 0 && (
+        <section style={{ marginBottom: '4rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '2rem' }}>
+            <h2 style={{ fontSize: '1.5rem', whiteSpace: 'nowrap', color: '#fbbf24' }}>Bajo Pedido</h2>
+            <div style={{ height: '1px', background: 'var(--glass-border)', width: '100%' }}></div>
+          </div>
+          <div className="grid">
+            {orderProducts.map(product => (
+              <ProductCard key={product.id} product={product} isOrder onOpenImage={setSelectedImage} />
+            ))}
+          </div>
+        </section>
+      )}
 
-      {!loading && products.length === 0 && (
-        <div className="glass" style={{ textAlign: 'center', padding: '5rem', marginTop: '2rem' }}>
-          <p style={{ color: 'var(--text-muted)', fontSize: '1.2rem' }}>
-            Nuestro catálogo está siendo actualizado. <br/> Vuelve pronto para ver las novedades.
-          </p>
+      {loading && (
+        <div style={{ textAlign: 'center', marginTop: '4rem' }}>
+          <p style={{ color: 'var(--text-muted)' }}>Cargando catálogo...</p>
+        </div>
+      )}
+
+      {/* LIGHTBOX MODAL */}
+      {selectedImage && (
+        <div 
+          onClick={() => setSelectedImage(null)}
+          style={{
+            position: 'fixed',
+            top: 0, left: 0, width: '100%', height: '100%',
+            backgroundColor: 'rgba(0,0,0,0.9)',
+            backdropFilter: 'blur(10px)',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 1000,
+            cursor: 'zoom-out'
+          }}
+        >
+          <img src={selectedImage} alt="Preview" style={{ maxWidth: '90%', maxHeight: '90%', borderRadius: '12px' }} />
+          <button style={{ position: 'absolute', top: '2rem', right: '2rem', background: 'none', border: 'none', color: 'white', fontSize: '3rem' }}>×</button>
         </div>
       )}
 
       <footer style={{ marginTop: '8rem', padding: '4rem 0', textAlign: 'center', borderTop: '1px solid var(--glass-border)' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>© 2024 DEPORTUX. Todos los derechos reservados.</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>© 2024 DEPORTUX. Envíos a todo el país.</p>
       </footer>
     </div>
   );
 };
+
+const ProductCard = ({ product, isOrder, onOpenImage }) => (
+  <div className="glass card">
+    <div style={{ position: 'relative', cursor: 'zoom-in' }} onClick={() => onOpenImage(product.image_url)}>
+      <img src={product.image_url} alt={product.name} className="product-img" />
+      {isOrder && (
+        <span className="badge" style={{ 
+          position: 'absolute', 
+          top: '1rem', 
+          left: '1rem',
+          background: '#fbbf24',
+          color: 'black',
+          fontWeight: 'bold'
+        }}>BAJO PEDIDO</span>
+      )}
+      {!isOrder && (
+        <span className="badge" style={{ 
+          position: 'absolute', 
+          top: '1rem', 
+          right: '1rem',
+          background: 'rgba(0,0,0,0.5)',
+          backdropFilter: 'blur(5px)',
+          color: 'white'
+        }}>Talla {product.size}</span>
+      )}
+    </div>
+    <div className="product-info">
+      <h3 style={{ marginBottom: '0.5rem', fontSize: '1.25rem' }}>{product.name}</h3>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
+        <span className="price" style={{ color: isOrder ? '#fbbf24' : 'inherit' }}>
+          {isOrder ? 'Preguntar Precio' : `$${product.price}`}
+        </span>
+        <button className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
+          {isOrder ? 'Cotizar' : 'Comprar'}
+        </button>
+      </div>
+    </div>
+  </div>
+);
 
 export default Catalog;
