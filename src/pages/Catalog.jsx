@@ -42,17 +42,27 @@ const Catalog = () => {
       </header>
 
       <section style={{ marginBottom: '5rem', textAlign: 'center' }}>
-        <div className="glass" style={{ 
-          display: 'inline-flex', 
-          alignItems: 'center', 
-          gap: '1rem', 
-          padding: '0.8rem 1.5rem', 
-          marginBottom: '2rem',
-          border: '1px solid var(--primary)',
-          fontSize: '0.9rem'
-        }}>
-          <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>📞 CONTACTO:</span>
-          <span>5514512919 o 2872360877</span>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '2.5rem' }}>
+          <a href="https://wa.me/525514512919" target="_blank" rel="noreferrer" className="btn" style={{ 
+            background: '#25D366', 
+            color: 'white', 
+            fontSize: '0.85rem',
+            padding: '0.6rem 1.2rem',
+            borderRadius: '99px',
+            boxShadow: '0 4px 15px rgba(37, 211, 102, 0.3)'
+          }}>
+            <span style={{ marginRight: '0.5rem' }}>📲</span> WhatsApp 5514512919
+          </a>
+          <a href="https://wa.me/522872360877" target="_blank" rel="noreferrer" className="btn" style={{ 
+            background: '#25D366', 
+            color: 'white', 
+            fontSize: '0.85rem',
+            padding: '0.6rem 1.2rem',
+            borderRadius: '99px',
+            boxShadow: '0 4px 15px rgba(37, 211, 102, 0.3)'
+          }}>
+            <span style={{ marginRight: '0.5rem' }}>📲</span> WhatsApp 2872360877
+          </a>
         </div>
         <h1 style={{ fontSize: 'clamp(2rem, 6vw, 3.5rem)', marginBottom: '1rem', lineHeight: '1.1' }}>
           Tu Estilo, <br/> Bajo Tus Reglas
