@@ -156,7 +156,8 @@ const AdminDashboard = () => {
   const addToOrderList = (p) => {
     setActiveOrderItems([...activeOrderItems, {
       orderId: Date.now(), id: p.id, name: p.name, price: parseFloat(p.price || 0),
-      size: p.size === 'N/A' ? '' : p.size, image_url: p.image_url, quantity: 1, comment: ''
+      size: p.size === 'N/A' ? '' : p.size, image_url: p.image_url, quantity: 1, comment: '',
+      category: p.category || 'Adulto'
     }]);
   };
 
@@ -426,7 +427,7 @@ const AdminDashboard = () => {
                       >
                         <img src={p.image_url} style={{ width: '30px', height: '30px', borderRadius: '4px' }} alt="" />
                         <div style={{ fontSize: '0.75rem' }}>
-                            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>#{p.short_id}</span> - {p.name}
+                            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>#{p.short_id}</span> - {p.name} <span style={{ opacity: 0.6, fontSize: '0.65rem' }}>({p.category || 'Adulto'})</span>
                         </div>
                       </div>
                     ))}
@@ -444,9 +445,12 @@ const AdminDashboard = () => {
             <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
               {activeOrderItems.map(item => (
                 <div key={item.orderId} className="glass" style={{ padding: '0.8rem', marginBottom: '0.8rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                    <strong style={{ fontSize: '0.8rem' }}>{item.name}</strong>
-                    <button onClick={() => setActiveOrderItems(activeOrderItems.filter(i => i.orderId !== item.orderId))} style={{ color: '#ff4444', background: 'none', border: 'none' }}>×</button>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '0.8rem' }}>
+                        <strong>{item.name}</strong>
+                        <span style={{ display: 'block', fontSize: '0.65rem', opacity: 0.7, marginTop: '2px' }}>Categoría: {item.category}</span>
+                    </div>
+                    <button onClick={() => setActiveOrderItems(activeOrderItems.filter(i => i.orderId !== item.orderId))} style={{ color: '#ff4444', background: 'none', border: 'none', padding: '0 0.5rem' }}>×</button>
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.4rem', marginTop: '0.5rem' }}>
                     <input type="text" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.size} onChange={e => updateOrderItem(item.orderId, { size: e.target.value })} />
