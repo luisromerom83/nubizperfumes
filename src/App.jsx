@@ -9,6 +9,7 @@ function App() {
       <div className="app-container">
         <Routes>
           <Route path="/" element={<Catalog />} />
+          <Route path="/category/:catName" element={<Catalog />} />
           <Route path="/admin" element={<AdminDashboard />} />
         </Routes>
       </div>

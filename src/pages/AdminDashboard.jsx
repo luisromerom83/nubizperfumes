@@ -10,6 +10,7 @@ const AdminDashboard = () => {
   const [loginData, setLoginData] = useState({ user: '', password: '' });
   const [isUploading, setIsUploading] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
+  const [hoveredImage, setHoveredImage] = useState(null);
   
   const [newProduct, setNewProduct] = useState({ 
     name: '', size: '', price: '', type: 'stock', category: 'Adulto', image: null 
@@ -214,11 +215,11 @@ const AdminDashboard = () => {
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
             <div className="glass" style={{ padding: '1rem' }}>
               <p style={{ color: 'var(--primary)', fontWeight: 'bold' }}>ADULTO</p>
-              {products.filter(p => !p.category || p.category === 'Adulto').map(p => <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} />)}
+              {products.filter(p => !p.category || p.category === 'Adulto').map(p => <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} />)}
             </div>
             <div className="glass" style={{ padding: '1rem' }}>
               <p style={{ color: '#fbbf24', fontWeight: 'bold' }}>NIÑO</p>
-              {products.filter(p => p.category === 'Niño').map(p => <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} />)}
+              {products.filter(p => p.category === 'Niño').map(p => <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} />)}
             </div>
           </div>
         </div>
@@ -281,11 +282,28 @@ const AdminDashboard = () => {
         </div>
       </section>
 
+      {hoveredImage && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 9999,
+          pointerEvents: 'none',
+          backgroundColor: 'rgba(0,0,0,0.8)',
+          padding: '1rem',
+          borderRadius: '1rem',
+          boxShadow: '0 0 50px rgba(0,0,0,0.5)',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          <img src={hoveredImage} style={{ maxWidth: '400px', maxHeight: '400px', borderRadius: '0.5rem', display: 'block', border: '2px solid white' }} alt="" />
+        </div>
+      )}
     </div>
   );
 };
 
-const AdminItem = ({ p, onAdd, onDelete, onEdit }) => (
+const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover }) => (
   <div className="glass" style={{ padding: '0.6rem', display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem', position: 'relative' }}>
     <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.5rem', padding: '2px 4px', borderRadius: '4px 0 4px 0', zIndex: 1 }}>
         {p.type === 'order' ? 'BAJO PEDIDO' : 'STOCK'}
@@ -293,7 +311,13 @@ const AdminItem = ({ p, onAdd, onDelete, onEdit }) => (
     <div style={{ position: 'absolute', bottom: '0.6rem', left: '0.6rem', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.4rem', padding: '1px 3px', borderRadius: '2px', zIndex: 1, letterSpacing: '0.5px' }}>
         {p.category?.toUpperCase() || 'ADULTO'}
     </div>
-    <img src={p.image_url} style={{ width: '45px', height: '45px', borderRadius: '4px' }} alt="" />
+    <img 
+      src={p.image_url} 
+      style={{ width: '45px', height: '45px', borderRadius: '4px', cursor: 'zoom-in' }} 
+      alt="" 
+      onMouseEnter={() => onHover(p.image_url)}
+      onMouseLeave={() => onHover(null)}
+    />
     <div style={{ flex: 1 }}>
       <p style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{p.name}</p>
       <div style={{ display: 'flex', gap: '0.3rem' }}>
