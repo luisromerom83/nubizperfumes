@@ -32,7 +32,7 @@ const Catalog = () => {
                             (currentCategory === 'Niño' && p.category === 'Niño');
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
-  });
+  }).sort((a, b) => (b.is_favorite ? 1 : 0) - (a.is_favorite ? 1 : 0));
 
   return (
     <div className="catalog-page">

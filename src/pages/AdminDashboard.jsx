@@ -13,11 +13,13 @@ const AdminDashboard = () => {
   const [hoveredImage, setHoveredImage] = useState(null);
   
   const [newProduct, setNewProduct] = useState({ 
-    name: '', size: '', price: '', type: 'stock', category: 'Adulto', image: null 
+    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null 
   });
   const [editingId, setEditingId] = useState(null);
   const [currentImageURL, setCurrentImageURL] = useState('');
   const [manualItem, setManualItem] = useState({ name: '', size: '', quantity: 1, comment: '' });
+  const [isNinoOpen, setIsNinoOpen] = useState(true);
+  const [isAdultoOpen, setIsAdultoOpen] = useState(true);
 
   useEffect(() => {
     const auth = sessionStorage.getItem('isAdminAuthenticated');
@@ -82,6 +84,7 @@ const AdminDashboard = () => {
         imageURL, 
         type: newProduct.type,
         category: newProduct.category || 'Adulto',
+        is_favorite: newProduct.is_favorite || false,
         ...(editingId && { id: editingId })
       };
       await fetch('/api/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -147,14 +150,31 @@ const AdminDashboard = () => {
   };
 
   const resetForm = () => {
-    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', image: null });
+    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null });
     setEditingId(null); setCurrentImageURL('');
   };
 
   const handleEdit = (p) => {
-    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', image: null });
+    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, image: null });
     setEditingId(p.id); setCurrentImageURL(p.image_url);
     window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const updateProductAttribute = async (id, attribute, value) => {
+    const product = products.find(p => p.id === id);
+    if (!product) return;
+    const updated = { ...product, [attribute]: value };
+    try {
+      await fetch('/api/products', { 
+        method: 'PUT', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({
+          ...updated,
+          imageURL: updated.image_url // API expects imageURL
+        }) 
+      });
+      setProducts(products.map(p => p.id === id ? updated : p));
+    } catch (e) { console.error(e); }
   };
 
   if (!isAuthenticated) return (
@@ -178,16 +198,21 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3rem' }}>
+      <style>{`
+        .inline-edit:hover { background: rgba(255,255,255,0.05) !important; border-radius: 4px; }
+        .inline-edit:focus { background: rgba(255,255,255,0.1) !important; border-bottom: 1px solid var(--primary) !important; border-radius: 4px 4px 0 0; }
+        .collapse-header:hover { background: rgba(255,255,255,0.05); }
+      `}</style>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
           <img src="/logo.png" alt="Logo" style={{ height: '40px' }} />
-          <h1>Admin Deportux</h1>
+          <h1 style={{ fontSize: '1.5rem' }}>Admin Deportux</h1>
         </div>
         <Link to="/" className="btn">Ir al Catálogo</Link>
       </header>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1.1fr', gap: '2rem', alignItems: 'start' }}>
-        <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'start' }}>
+        <div style={{ flex: '1.2', minWidth: '320px' }}>
           <section className="glass" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
             <h3>Añadir/Editar Producto</h3>
             <form onSubmit={handleCatalogSubmit} style={{ display: 'grid', gap: '0.8rem', marginTop: '1rem' }}>
@@ -205,26 +230,62 @@ const AdminDashboard = () => {
                         <option value="order">Bajo Pedido</option>
                     </select>
                     <input type="number" placeholder="Precio ($)" required={newProduct.type === 'stock'} className="glass" style={{ padding: '0.5rem' }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
-                    <input type="file" accept="image/*" className="glass" style={{ padding: '0.3rem' }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
+                    <input type="file" accept="image/*" className="glass" style={{ padding: '0.3rem', fontSize: '0.7rem' }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: '8px' }}>
+                    <input 
+                      type="checkbox" 
+                      id="fav-check"
+                      checked={newProduct.is_favorite} 
+                      onChange={e => setNewProduct({...newProduct, is_favorite: e.target.checked})} 
+                    />
+                    <label htmlFor="fav-check" style={{ fontSize: '0.8rem', cursor: 'pointer' }}>★ Destacar este producto (Favorito)</label>
                 </div>
                 <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem' }} disabled={isUploading}>{isUploading ? 'Procesando...' : 'Guardar Producto'}</button>
             </form>
           </section>
 
-          <h2>Inventario Agrupado</h2>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginTop: '1rem' }}>
-            <div className="glass" style={{ padding: '1rem' }}>
-              <p style={{ color: 'var(--primary)', fontWeight: 'bold' }}>ADULTO</p>
-              {products.filter(p => !p.category || p.category === 'Adulto').map(p => <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} />)}
+          <h2>Inventario General</h2>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
+            <div className="glass" style={{ padding: '0', overflow: 'hidden' }}>
+              <div 
+                onClick={() => setIsNinoOpen(!isNinoOpen)} 
+                className="collapse-header"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '1rem' }}
+              >
+                <p style={{ color: '#fbbf24', fontWeight: 'bold', margin: 0 }}>NIÑO ({products.filter(p => p.category === 'Niño').length})</p>
+                <span>{isNinoOpen ? '▲' : '▼'}</span>
+              </div>
+              {isNinoOpen && (
+                <div style={{ padding: '0 1rem 1rem 1rem' }}>
+                    {products.filter(p => p.category === 'Niño').map(p => (
+                        <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
+                    ))}
+                </div>
+              )}
             </div>
-            <div className="glass" style={{ padding: '1rem' }}>
-              <p style={{ color: '#fbbf24', fontWeight: 'bold' }}>NIÑO</p>
-              {products.filter(p => p.category === 'Niño').map(p => <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} />)}
+            
+            <div className="glass" style={{ padding: '0', overflow: 'hidden' }}>
+              <div 
+                onClick={() => setIsAdultoOpen(!isAdultoOpen)} 
+                className="collapse-header"
+                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '1rem' }}
+              >
+                <p style={{ color: 'var(--primary)', fontWeight: 'bold', margin: 0 }}>ADULTO ({products.filter(p => !p.category || p.category === 'Adulto').length})</p>
+                <span>{isAdultoOpen ? '▲' : '▼'}</span>
+              </div>
+              {isAdultoOpen && (
+                <div style={{ padding: '0 1rem 1rem 1rem' }}>
+                    {products.filter(p => !p.category || p.category === 'Adulto').map(p => (
+                        <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
 
-        <aside>
+        <aside style={{ flex: '1', minWidth: '320px' }}>
           <div className="glass" style={{ padding: '1.5rem', border: '2px solid var(--primary)', position: 'sticky', top: '1rem' }}>
             <h3>Pedido Actual 🛒</h3>
             <div className="glass" style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', marginBottom: '1rem' }}>
@@ -303,7 +364,7 @@ const AdminDashboard = () => {
   );
 };
 
-const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover }) => (
+const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
   <div className="glass" style={{ padding: '0.6rem', display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem', position: 'relative' }}>
     <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.5rem', padding: '2px 4px', borderRadius: '4px 0 4px 0', zIndex: 1 }}>
         {p.type === 'order' ? 'BAJO PEDIDO' : 'STOCK'}
@@ -319,13 +380,30 @@ const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover }) => (
       onMouseLeave={() => onHover(null)}
     />
     <div style={{ flex: 1 }}>
-      <p style={{ fontSize: '0.75rem', fontWeight: 'bold' }}>{p.name}</p>
-      <div style={{ display: 'flex', gap: '0.3rem' }}>
-        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ padding: '0.05rem 0.3rem', fontSize: '0.6rem' }}>+</button>
-        <button onClick={() => onEdit(p)} className="btn" style={{ padding: '0.05rem 0.3rem', fontSize: '0.6rem', background: '#3b82f6' }}>E</button>
-        <button onClick={() => onDelete(p.id)} style={{ color: '#444', background: 'none', border: 'none', cursor: 'pointer' }}>×</button>
+      <input 
+        type="text" 
+        defaultValue={p.name}
+        onBlur={(e) => {
+          if (e.target.value !== p.name) onUpdate(p.id, 'name', e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') e.target.blur();
+        }}
+        style={{ 
+          background: 'none', border: 'none', color: 'white', width: '100%', 
+          fontSize: '0.85rem', fontWeight: 'bold', borderBottom: '1px transparent solid',
+          outline: 'none', padding: '2px 0'
+        }}
+        className="inline-edit"
+        title="Clic para editar nombre"
+      />
+      <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.2rem' }}>
+        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>+</button>
+        <button onClick={() => onEdit(p)} className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#3b82f6' }}>E</button>
+        <button onClick={() => onDelete(p.id)} style={{ color: '#ff4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0 0.5rem' }}>×</button>
       </div>
     </div>
+    {p.is_favorite && <div style={{ position: 'absolute', top: '0', right: '0', color: '#fbbf24', fontSize: '1rem', padding: '2px' }}>★</div>}
   </div>
 );
 
