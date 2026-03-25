@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
@@ -165,7 +166,7 @@ const AdminDashboard = () => {
     const summary = {};
     itemsList.forEach(item => {
       const key = `${item.name}-${item.size}`;
-      if (!summary[key]) summary[key] = { name: item.name, size: item.size, total: 0, items: [] };
+      if (!summary[key]) summary[key] = { name: item.name, size: item.size, total: 0, items: [], image_url: item.image_url };
       const q = parseInt(item.quantity) || 1;
       summary[key].total += q;
       summary[key].items.push({ q, name: item.name, size: item.size, comment: item.comment });
@@ -173,18 +174,63 @@ const AdminDashboard = () => {
     return Object.values(summary);
   };
 
-  const downloadSummaryXLSX = () => {
+  const downloadSummaryXLSX = async () => {
     const summary = getSummaryForItems(activeOrderItems);
-    const data = summary.map(g => ({
-      "Cantidad de uniformes": g.total,
-      "Nombre Uniforme": g.name,
-      "Talla": g.size || 'Unica'
-    }));
-    
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Pedido Proveedor");
-    XLSX.writeFile(wb, `Pedido_Deportux_${new Date().toISOString().split('T')[0]}.xlsx`);
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Pedido Proveedor');
+
+    // Configurar encabezados y anchos
+    worksheet.columns = [
+      { header: 'Cant.', key: 'q', width: 8 },
+      { header: 'Nombre del Uniforme', key: 'name', width: 35 },
+      { header: 'Talla', key: 'size', width: 10 },
+      { header: 'Miniatura', key: 'img', width: 15 }
+    ];
+
+    // Estilo de encabezado
+    const headerRow = worksheet.getRow(1);
+    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D4ED8' } };
+    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+    headerRow.height = 25;
+
+    for (let i = 0; i < summary.length; i++) {
+        const g = summary[i];
+        const rowIndex = i + 2;
+        const row = worksheet.addRow({
+          q: g.total,
+          name: g.name,
+          size: g.size || 'Unica'
+        });
+        
+        row.height = 65; 
+        row.alignment = { vertical: 'middle', horizontal: 'center' };
+        row.getCell('name').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+
+        try {
+            if (g.image_url) {
+                const response = await fetch(g.image_url);
+                const buffer = await response.arrayBuffer();
+                const imageId = workbook.addImage({
+                    buffer: buffer,
+                    extension: 'jpeg',
+                });
+                worksheet.addImage(imageId, {
+                    tl: { col: 3, row: rowIndex - 1 },
+                    ext: { width: 80, height: 80 },
+                    editAs: 'oneCell'
+                });
+            }
+        } catch (e) { console.error("Error al cargar imagen para el Excel:", e); }
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Pedido_Deportux_Visual_${new Date().toISOString().split('T')[0]}.xlsx`;
+    link.click();
   };
 
   const resetForm = () => {
