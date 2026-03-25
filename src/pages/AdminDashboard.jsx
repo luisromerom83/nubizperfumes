@@ -149,6 +149,19 @@ const AdminDashboard = () => {
     return Object.values(summary);
   };
 
+  const downloadSummaryCSV = () => {
+    const summary = getSummaryForItems(activeOrderItems);
+    const header = "Cantidad de uniformes, Nombre Uniforme, Talla\n";
+    const rows = summary.map(g => `${g.total}, "${g.name}", ${g.size || 'Unica'}`).join("\n");
+    const blob = new Blob([header + rows], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `Resumen_Deportux_${new Date().toISOString().split('T')[0]}.csv`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
   const resetForm = () => {
     setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null });
     setEditingId(null); setCurrentImageURL('');
@@ -324,7 +337,12 @@ const AdminDashboard = () => {
       </div>
 
       <section style={{ marginTop: '5rem' }}>
-        <h2 style={{ marginBottom: '1.5rem', color: 'var(--primary)' }}>Resumen del Trabajo Actual (Proveedor)</h2>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+          <h2 style={{ margin: 0, color: 'var(--primary)' }}>Resumen del Trabajo Actual (Proveedor)</h2>
+          <button onClick={downloadSummaryCSV} className="btn" style={{ background: '#10b981', color: 'white', padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
+            📥 Descargar CSV
+          </button>
+        </div>
         <div className="glass" style={{ padding: '2rem' }}>
           {getSummaryForItems(activeOrderItems).map((g, idx) => (
             <div key={idx} style={{ marginBottom: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.8rem' }}>
