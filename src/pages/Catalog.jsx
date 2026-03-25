@@ -32,7 +32,14 @@ const Catalog = () => {
                             (currentCategory === 'Niño' && p.category === 'Niño');
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
-  }).sort((a, b) => (b.is_favorite ? 1 : 0) - (a.is_favorite ? 1 : 0));
+  }).sort((a, b) => {
+    // 1. Favoritos primero
+    if (b.is_favorite !== a.is_favorite) return (b.is_favorite ? 1 : 0) - (a.is_favorite ? 1 : 0);
+    // 2. Existencia (stock) segundo
+    if (a.type !== b.type) return (a.type === 'stock' ? -1 : 1);
+    // 3. Alfabético tercero
+    return a.name.localeCompare(b.name);
+  });
 
   return (
     <div className="catalog-page">
