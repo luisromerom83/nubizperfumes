@@ -291,7 +291,7 @@ const AdminDashboard = () => {
             <div className="glass" style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', marginBottom: '1rem' }}>
               <input type="text" placeholder="Manual..." className="glass" style={{ padding: '0.3rem', width: '100%', marginBottom: '0.5rem' }} value={manualItem.name} onChange={e => setManualItem({...manualItem, name: e.target.value})} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <input type="text" placeholder="Talla" className="glass" style={{ padding: '0.3rem' }} value={manualItem.size} onChange={e => setManualItem({...manualItem, size: e.target.value})} />
+                <input type="text" placeholder="Talla" className="glass" style={{ padding: '0.3rem', width: '100%', minWidth: 0 }} value={manualItem.size} onChange={e => setManualItem({...manualItem, size: e.target.value})} />
                 <button onClick={addManualItem} className="btn btn-primary" style={{ padding: '0.3rem' }}>+</button>
               </div>
             </div>
@@ -302,10 +302,10 @@ const AdminDashboard = () => {
                     <strong style={{ fontSize: '0.8rem' }}>{item.name}</strong>
                     <button onClick={() => setActiveOrderItems(activeOrderItems.filter(i => i.orderId !== item.orderId))} style={{ color: '#ff4444', background: 'none', border: 'none' }}>×</button>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.4rem', marginTop: '0.5rem' }}>
-                    <input type="text" className="glass" style={{ padding: '0.2rem' }} value={item.size} onChange={e => updateOrderItem(item.orderId, { size: e.target.value })} />
-                    <input type="number" className="glass" style={{ padding: '0.2rem' }} value={item.quantity} onChange={e => updateOrderItem(item.orderId, { quantity: e.target.value })} />
-                    <input type="number" className="glass" style={{ padding: '0.2rem' }} value={item.price} onChange={e => updateOrderItem(item.orderId, { price: e.target.value })} />
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.4rem', marginTop: '0.5rem' }}>
+                    <input type="text" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.size} onChange={e => updateOrderItem(item.orderId, { size: e.target.value })} />
+                    <input type="number" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.quantity} onChange={e => updateOrderItem(item.orderId, { quantity: e.target.value })} />
+                    <input type="number" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.price} onChange={e => updateOrderItem(item.orderId, { price: e.target.value })} />
                   </div>
                   <input type="text" className="glass" style={{ width: '100%', padding: '0.2rem', marginTop: '0.4rem' }} value={item.comment} onChange={e => updateOrderItem(item.orderId, { comment: e.target.value })} placeholder="Notas..." />
                 </div>
