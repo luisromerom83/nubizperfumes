@@ -23,6 +23,16 @@ export default async function handler(request, response) {
     try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'stock';`; } catch (e) {}
     try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Adulto';`; } catch (e) {}
     try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE;`; } catch (e) {}
+    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS short_id VARCHAR(10);`; } catch (e) {}
+
+    // Migración para short_id si está vacío
+    try {
+      await pool.sql`
+        UPDATE products 
+        SET short_id = LPAD(id::text, 4, '0') 
+        WHERE short_id IS NULL OR short_id = '';
+      `;
+    } catch (e) { console.error("Error migración ID:", e); }
 
     // 2. GET
     if (request.method === 'GET') {
@@ -32,10 +42,10 @@ export default async function handler(request, response) {
 
     // 3. POST (Crear)
     if (request.method === 'POST') {
-      const { name, size, price, imageURL, type, category, is_favorite } = request.body;
+      const { name, size, price, imageURL, type, category, is_favorite, short_id } = request.body;
       const result = await pool.sql`
-        INSERT INTO products (name, size, price, image_url, type, category, is_favorite)
-        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'}, ${category || 'Adulto'}, ${is_favorite || false})
+        INSERT INTO products (name, size, price, image_url, type, category, is_favorite, short_id)
+        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'}, ${category || 'Adulto'}, ${is_favorite || false}, ${short_id || ''})
         RETURNING *;
       `;
       return response.status(201).json(result.rows[0]);
@@ -43,10 +53,10 @@ export default async function handler(request, response) {
 
     // 4. PUT (Actualizar)
     if (request.method === 'PUT') {
-      const { id, name, size, price, imageURL, type, category, is_favorite } = request.body;
+      const { id, name, size, price, imageURL, type, category, is_favorite, short_id } = request.body;
       const result = await pool.sql`
         UPDATE products 
-        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}, category = ${category}, is_favorite = ${is_favorite}
+        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}, category = ${category}, is_favorite = ${is_favorite}, short_id = ${short_id}
         WHERE id = ${id}
         RETURNING *;
       `;

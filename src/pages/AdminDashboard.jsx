@@ -16,8 +16,9 @@ const AdminDashboard = () => {
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   
   const [newProduct, setNewProduct] = useState({ 
-    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null 
+    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null 
   });
+  const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [currentImageURL, setCurrentImageURL] = useState('');
   const [manualItem, setManualItem] = useState({ name: '', size: '', quantity: 1, comment: '' });
@@ -124,6 +125,7 @@ const AdminDashboard = () => {
         type: newProduct.type,
         category: newProduct.category || 'Adulto',
         is_favorite: newProduct.is_favorite || false,
+        short_id: newProduct.short_id || '',
         ...(editingId && { id: editingId })
       };
       await fetch('/api/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -248,12 +250,12 @@ const AdminDashboard = () => {
   };
 
   const resetForm = () => {
-    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null });
+    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null });
     setEditingId(null); setCurrentImageURL('');
   };
 
   const handleEdit = (p) => {
-    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, image: null });
+    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, short_id: p.short_id || '', image: null });
     setEditingId(p.id); setCurrentImageURL(p.image_url);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -302,6 +304,7 @@ const AdminDashboard = () => {
         .collapse-header:hover { background: rgba(255,255,255,0.05); }
         .form-grid-3 { display: grid; grid-template-columns: 1.2fr 1.1fr 1fr; gap: 0.5rem; }
         .form-grid-2 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 0.5rem; }
+        .search-result-item:hover { background: rgba(59,130,246,0.2) !important; }
         @media (max-width: 600px) {
           .form-grid-3, .form-grid-2 { grid-template-columns: 1fr !important; }
           .admin-page { padding: 1rem !important; }
@@ -321,7 +324,10 @@ const AdminDashboard = () => {
           <section className="glass" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
             <h3>Añadir/Editar Producto</h3>
             <form onSubmit={handleCatalogSubmit} style={{ display: 'grid', gap: '0.8rem', marginTop: '1rem' }}>
-                <input type="text" placeholder="Nombre del Uniforme" required className="glass" style={{ padding: '0.5rem', width: '100%' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+                <div style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="text" placeholder="ID (4 díj)" className="glass" style={{ width: '85px', padding: '0.5rem' }} value={newProduct.short_id} onChange={e => setNewProduct({...newProduct, short_id: e.target.value})} />
+                    <input type="text" placeholder="Nombre del Uniforme" required className="glass" style={{ flex: 1, padding: '0.5rem' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+                </div>
                 <div className="form-grid-3">
                     <input type="text" placeholder="Tallas" required={newProduct.type === 'stock'} className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.size} onChange={e => setNewProduct({...newProduct, size: e.target.value})} />
                     <select className="glass" style={{ padding: '0.5rem', background: '#1e293b' }} value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
@@ -393,6 +399,41 @@ const AdminDashboard = () => {
         <aside style={{ flex: '1', minWidth: '320px' }}>
           <div className="glass" style={{ padding: '1.5rem', border: '2px solid var(--primary)', position: 'sticky', top: '1rem' }}>
             <h3>Pedido Actual 🛒</h3>
+            
+            <div style={{ position: 'relative', marginBottom: '1rem' }}>
+                <input 
+                  type="text" 
+                  placeholder="🔍 Buscar por ID o Nombre..." 
+                  className="glass" 
+                  style={{ width: '100%', padding: '0.8rem', borderRadius: '8px' }}
+                  value={orderSearchTerm}
+                  onChange={e => setOrderSearchTerm(e.target.value)}
+                />
+                {orderSearchTerm && (
+                  <div className="glass" style={{ 
+                    position: 'absolute', top: '100%', left: 0, width: '100%', zIndex: 100, 
+                    maxHeight: '250px', overflowY: 'auto', background: '#1e293b', border: '1px solid var(--primary)'
+                  }}>
+                    {products.filter(p => 
+                      p.name.toLowerCase().includes(orderSearchTerm.toLowerCase()) || 
+                      p.short_id?.includes(orderSearchTerm)
+                    ).map(p => (
+                      <div 
+                        key={p.id} 
+                        onClick={() => { addToOrderList(p); setOrderSearchTerm(''); }}
+                        style={{ padding: '0.5rem', borderBottom: '1px solid #334155', cursor: 'pointer', display: 'flex', gap: '0.5rem', alignItems: 'center' }}
+                        className="search-result-item"
+                      >
+                        <img src={p.image_url} style={{ width: '30px', height: '30px', borderRadius: '4px' }} alt="" />
+                        <div style={{ fontSize: '0.75rem' }}>
+                            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>#{p.short_id}</span> - {p.name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+            </div>
+
             <div className="glass" style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', marginBottom: '1rem' }}>
               <input type="text" placeholder="Manual..." className="glass" style={{ padding: '0.3rem', width: '100%', marginBottom: '0.5rem' }} value={manualItem.name} onChange={e => setManualItem({...manualItem, name: e.target.value})} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
@@ -490,23 +531,26 @@ const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
       onMouseLeave={() => onHover(null)}
     />
     <div style={{ flex: 1 }}>
-      <input 
-        type="text" 
-        defaultValue={p.name}
-        onBlur={(e) => {
-          if (e.target.value !== p.name) onUpdate(p.id, 'name', e.target.value);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.target.blur();
-        }}
-        style={{ 
-          background: 'none', border: 'none', color: 'white', width: '100%', 
-          fontSize: '0.85rem', fontWeight: 'bold', borderBottom: '1px transparent solid',
-          outline: 'none', padding: '2px 0'
-        }}
-        className="inline-edit"
-        title="Clic para editar nombre"
-      />
+      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+        <span style={{ color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 'bold' }}>#{p.short_id}</span>
+        <input 
+          type="text" 
+          defaultValue={p.name}
+          onBlur={(e) => {
+            if (e.target.value !== p.name) onUpdate(p.id, 'name', e.target.value);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.target.blur();
+          }}
+          style={{ 
+            background: 'none', border: 'none', color: 'white', width: '100%', 
+            fontSize: '0.85rem', fontWeight: 'bold', borderBottom: '1px transparent solid',
+            outline: 'none', padding: '2px 0'
+          }}
+          className="inline-edit"
+          title="Clic para editar nombre"
+        />
+      </div>
       <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.2rem' }}>
         <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>+</button>
         <button onClick={() => onEdit(p)} className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#3b82f6' }}>E</button>
