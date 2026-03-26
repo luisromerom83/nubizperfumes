@@ -9,7 +9,6 @@ const Catalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
   const [isCartVisible, setIsCartVisible] = useState(false);
-  const [useTestData, setUseTestData] = useState(false);
   
   const { catName } = useParams();
   const navigate = useNavigate();
@@ -17,12 +16,12 @@ const Catalog = () => {
 
   useEffect(() => {
     fetchProducts();
-  }, [useTestData]);
+  }, []);
 
   const fetchProducts = async () => {
     const startTime = Date.now();
     try {
-      const response = await fetch(`/api/products${useTestData ? '?test=true' : ''}`);
+      const response = await fetch('/api/products');
       const data = await response.json();
       setProducts(data);
     } catch (error) {
@@ -274,12 +273,6 @@ const Catalog = () => {
 
       <footer style={{ marginTop: '8rem', padding: '4rem 0', textAlign: 'center', borderTop: '1px solid var(--glass-border)' }}>
         <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>© 2024 DEPORTUX. Envíos a todo el país.</p>
-        <button 
-          onClick={() => setUseTestData(!useTestData)}
-          style={{ marginTop: '1rem', opacity: 0.2, fontSize: '0.6rem', background: 'none', border: 'none', color: 'white', cursor: 'pointer' }}
-        >
-          {useTestData ? 'Usar BD Real' : 'Usar Mock Data (Test)'}
-        </button>
       </footer>
     </div>
   );
