@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
+import Loader from '../components/Loader';
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
@@ -11,6 +12,7 @@ const AdminDashboard = () => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginData, setLoginData] = useState({ user: '', password: '' });
   const [isUploading, setIsUploading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
   const [hoveredImage, setHoveredImage] = useState(null);
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
@@ -22,17 +24,24 @@ const AdminDashboard = () => {
   const [editingId, setEditingId] = useState(null);
   const [currentImageURL, setCurrentImageURL] = useState('');
   const [manualItem, setManualItem] = useState({ name: '', size: '', quantity: 1, comment: '' });
-  const [isNinoOpen, setIsNinoOpen] = useState(true);
-  const [isAdultoOpen, setIsAdultoOpen] = useState(true);
+  const [openCategory, setOpenCategory] = useState(null); // Accordion: 'Adulto', 'Niño' o null
+  const [expandedHistory, setExpandedHistory] = useState(null); // ID del pedido expandido en el historial
+  const [isOrderOpen, setIsOrderOpen] = useState(false); // Floating side panel
 
   useEffect(() => {
-    const auth = sessionStorage.getItem('isAdminAuthenticated');
-    if (auth === 'true') {
-      setIsAuthenticated(true);
-      fetchProducts();
-      fetchOrdersHistory();
-      fetchDraft();
-    }
+    const init = async () => {
+      const auth = sessionStorage.getItem('isAdminAuthenticated');
+      if (auth === 'true') {
+        setIsAuthenticated(true);
+        await Promise.all([
+          fetchProducts(),
+          fetchOrdersHistory(),
+          fetchDraft()
+        ]);
+      }
+      setLoading(false);
+    };
+    init();
   }, []);
 
   useEffect(() => {
@@ -151,6 +160,48 @@ const AdminDashboard = () => {
             setDeletingId(null);
         }, 500);
     }
+  };
+
+  const updateOrderHistoryItem = async (orderId, itemIndex, field, value) => {
+    const order = ordersHistory.find(o => o.id === orderId);
+    if (!order) return;
+    
+    const newItems = [...order.items];
+    // Asegurar que numéricos sean números
+    const formattedValue = (field === 'price' || field === 'cost' || field === 'quantity') ? parseFloat(value) || 0 : value;
+    newItems[itemIndex] = { ...newItems[itemIndex], [field]: formattedValue };
+    
+    // Recalcular totales del pedido
+    let newTotalPrice = 0;
+    let newTotalCost = 0;
+    newItems.forEach(it => {
+        newTotalPrice += (parseFloat(it.price) || 0) * (parseInt(it.quantity) || 1);
+        newTotalCost += (parseFloat(it.cost || 0) || 0) * (parseInt(it.quantity) || 1);
+    });
+    const newTotalProfit = newTotalPrice - newTotalCost;
+
+    // Actualizar estado local (incluyendo los nuevos totales para el encabezado del registro)
+    setOrdersHistory(prev => prev.map(o => o.id === orderId ? { 
+        ...o, 
+        items: newItems,
+        total_price: newTotalPrice,
+        total_cost: newTotalCost,
+        total_profit: newTotalProfit
+    } : o));
+
+    try {
+        await fetch('/api/orders', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ 
+                id: orderId, 
+                items: newItems,
+                total_price: newTotalPrice,
+                total_cost: newTotalCost,
+                total_profit: newTotalProfit
+            })
+        });
+    } catch (e) { console.error("Error updating order history:", e); }
   };
 
   const addToOrderList = (p) => {
@@ -325,43 +376,84 @@ const AdminDashboard = () => {
 
   return (
     <div className="admin-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
+      <Loader show={loading} />
       <style>{`
+        * { box-sizing: border-box; }
         .inline-edit:hover { background: rgba(255,255,255,0.05) !important; border-radius: 4px; }
         .inline-edit:focus { background: rgba(255,255,255,0.1) !important; border-bottom: 1px solid var(--primary) !important; border-radius: 4px 4px 0 0; }
         .collapse-header:hover { background: rgba(255,255,255,0.05); }
         .form-grid-3 { display: grid; grid-template-columns: 1.2fr 1.1fr 1fr; gap: 0.5rem; }
         .form-grid-2 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 0.5rem; }
-        .search-result-item:hover { background: rgba(59,130,246,0.2) !important; }
-        @media (max-width: 600px) {
+        .search-result-item:hover { background: rgba(239, 129, 30, 0.2) !important; }
+        
+        .admin-grid {
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 1.5rem;
+          padding: 1rem 0;
+        }
+
+        .floating-order {
+          position: fixed; top: 0; right: 0; height: 100vh; width: 350px;
+          z-index: 1000; transition: transform 0.3s ease-in-out;
+          background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(15px);
+          border-left: 1px solid rgba(255,255,255,0.1);
+          padding: 1.5rem; box-shadow: -5px 0 20px rgba(0,0,0,0.5);
+        }
+        .floating-order.collapsed { transform: translateX(100%); }
+        .order-toggle {
+          position: fixed; right: 0; top: 50%; transform: translateY(-50%);
+          z-index: 1001; background: var(--primary); color: white;
+          padding: 1rem 0.5rem; border-radius: 10px 0 0 10px; cursor: pointer;
+          writing-mode: vertical-rl; text-orientation: mixed; font-weight: bold;
+        }
+
+        .table-responsive {
+          width: 100%;
+          overflow-x: auto;
+          -webkit-overflow-scrolling: touch;
+          margin-top: 1rem;
+          border-radius: 8px;
+        }
+
+        @media (max-width: 1100px) { 
+          .admin-grid { grid-template-columns: repeat(2, 1fr); } 
+          .floating-order { width: 450px; }
+        }
+
+        @media (max-width: 768px) {
+          .admin-grid { grid-template-columns: 1fr; }
           .form-grid-3, .form-grid-2 { grid-template-columns: 1fr !important; }
           .admin-page { padding: 1rem !important; }
-          h1 { fontSize: 1.2rem !important; }
+          .floating-order { width: 100vw; }
+          .resumen-grid { grid-template-columns: 1fr !important; }
+          .prod-header-row { flex-direction: column !important; align-items: stretch !important; }
+          .prod-id-input { width: 100% !important; }
         }
       `}</style>
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <img src="/logo.png" alt="Logo" style={{ height: '40px' }} />
-          <h1 style={{ fontSize: '1.5rem' }}>Admin Deportux</h1>
+          <img src="/logo.png" alt="Logo" style={{ height: '60px' }} />
         </div>
         <Link to="/" className="btn">Ir al Catálogo</Link>
       </header>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2rem', alignItems: 'start' }}>
-        <div style={{ flex: '1.2', minWidth: '320px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
+        <div style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
           <section className="glass" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
             <h3>Añadir/Editar Producto</h3>
             <form onSubmit={handleCatalogSubmit} style={{ display: 'grid', gap: '0.8rem', marginTop: '1rem' }}>
-                <div style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input type="text" placeholder="ID (4 díj)" className="glass" style={{ width: '85px', padding: '0.5rem' }} value={newProduct.short_id} onChange={e => setNewProduct({...newProduct, short_id: e.target.value})} />
+                <div className="prod-header-row" style={{ display: 'flex', gap: '0.5rem' }}>
+                    <input type="text" placeholder="ID (4 díj)" className="glass prod-id-input" style={{ width: '85px', padding: '0.5rem' }} value={newProduct.short_id} onChange={e => setNewProduct({...newProduct, short_id: e.target.value})} />
                     <input type="text" placeholder="Nombre del Uniforme" required className="glass" style={{ flex: 1, padding: '0.5rem' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
                 </div>
                 <div className="form-grid-3">
                     <input type="text" placeholder="Tallas" required={newProduct.type === 'stock'} className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.size} onChange={e => setNewProduct({...newProduct, size: e.target.value})} />
-                    <select className="glass" style={{ padding: '0.5rem', background: '#1e293b' }} value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
+                    <select className="glass" style={{ padding: '0.5rem', background: 'var(--bg-color)' }} value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
                         <option value="Adulto">Adulto</option>
                         <option value="Niño">Niño</option>
                     </select>
-                    <select className="glass" style={{ padding: '0.5rem', background: '#1e293b' }} value={newProduct.type} onChange={e => setNewProduct({...newProduct, type: e.target.value})}>
+                    <select className="glass" style={{ padding: '0.5rem', background: 'var(--bg-color)' }} value={newProduct.type} onChange={e => setNewProduct({...newProduct, type: e.target.value})}>
                         <option value="stock">Existencia</option>
                         <option value="order">Bajo Pedido</option>
                     </select>
@@ -387,46 +479,56 @@ const AdminDashboard = () => {
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
             <div className="glass" style={{ padding: '0', overflow: 'hidden' }}>
               <div 
-                onClick={() => setIsNinoOpen(!isNinoOpen)} 
+                onClick={() => setOpenCategory(openCategory === 'Niño' ? null : 'Niño')} 
                 className="collapse-header"
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '1rem' }}
               >
-                <p style={{ color: '#fbbf24', fontWeight: 'bold', margin: 0 }}>NIÑO ({products.filter(p => p.category === 'Niño').length})</p>
-                <span>{isNinoOpen ? '▲' : '▼'}</span>
+                <p style={{ color: 'var(--primary)', fontWeight: 'bold', margin: 0 }}>NIÑO ({products.filter(p => p.category === 'Niño').length})</p>
+                <span>{openCategory === 'Niño' ? '▲' : '▼'}</span>
               </div>
-              {isNinoOpen && (
-                <div style={{ padding: '0 1rem 1rem 1rem' }}>
-                    {products.filter(p => p.category === 'Niño').map(p => (
-                        <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
-                    ))}
-                </div>
-              )}
+              {openCategory === 'Niño' && (
+              <div style={{ padding: '0 1rem 1rem 1rem' }}>
+                  <div className="admin-grid">
+                      {products.filter(p => p.category === 'Niño').map(p => (
+                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
+                      ))}
+                  </div>
+              </div>
+            )}
             </div>
             
-            <div className="glass" style={{ padding: '0', overflow: 'hidden' }}>
+            <div className="glass" style={{ padding: '0', overflow: 'hidden', marginTop: '1rem' }}>
               <div 
-                onClick={() => setIsAdultoOpen(!isAdultoOpen)} 
+                onClick={() => setOpenCategory(openCategory === 'Adulto' ? null : 'Adulto')} 
                 className="collapse-header"
                 style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '1rem' }}
               >
                 <p style={{ color: 'var(--primary)', fontWeight: 'bold', margin: 0 }}>ADULTO ({products.filter(p => !p.category || p.category === 'Adulto').length})</p>
-                <span>{isAdultoOpen ? '▲' : '▼'}</span>
+                <span>{openCategory === 'Adulto' ? '▲' : '▼'}</span>
               </div>
-              {isAdultoOpen && (
-                <div style={{ padding: '0 1rem 1rem 1rem' }}>
-                    {products.filter(p => !p.category || p.category === 'Adulto').map(p => (
-                        <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
-                    ))}
-                </div>
-              )}
+              {openCategory === 'Adulto' && (
+              <div style={{ padding: '0 1rem 1rem 1rem' }}>
+                  <div className="admin-grid">
+                      {products.filter(p => !p.category || p.category === 'Adulto').map(p => (
+                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
+                      ))}
+                  </div>
+              </div>
+            )}
             </div>
           </div>
         </div>
 
-        <aside style={{ flex: '1', minWidth: '320px' }}>
-          <div className="glass" style={{ padding: '1.5rem', border: '2px solid var(--primary)', position: 'sticky', top: '1rem' }}>
+        {/* Floating Order Panel */}
+        <div className={`order-toggle`} onClick={() => setIsOrderOpen(!isOrderOpen)}>
+          {isOrderOpen ? 'CERRAR PEDIDO ➔' : '🛒 VER PEDIDO ACTUAL'}
+        </div>
+        <aside className={`floating-order ${isOrderOpen ? '' : 'collapsed'}`}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
             <h3>Pedido Actual 🛒</h3>
-            
+            <button onClick={() => setIsOrderOpen(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem' }}>×</button>
+          </div>
+          <div style={{ overflowY: 'auto', height: 'calc(100vh - 250px)', paddingRight: '0.5rem' }}>
             <div style={{ position: 'relative', marginBottom: '1rem' }}>
                 <input 
                   type="text" 
@@ -561,7 +663,7 @@ const AdminDashboard = () => {
 
           {/* Totales del Resumen */}
           <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem' }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
+            <div className="resumen-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
                 <div style={{ textAlign: 'center' }}>
                     <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Subtotal Costos</div>
                     <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#f87171' }}>${getTotalCost().toFixed(2)}</div>
@@ -598,30 +700,152 @@ const AdminDashboard = () => {
           <img src={hoveredImage} style={{ maxWidth: '400px', maxHeight: '400px', borderRadius: '0.5rem', display: 'block', border: '2px solid white' }} alt="" />
         </div>
       )}
+      <section style={{ marginTop: '5rem', marginBottom: '5rem' }}>
+        <h2 style={{ color: 'var(--primary)', marginBottom: '1.5rem' }}>📜 Historial de Pedidos Finalizados</h2>
+        <div style={{ display: 'grid', gap: '1rem' }}>
+          {ordersHistory.length === 0 ? (
+            <div className="glass" style={{ padding: '2rem', textAlign: 'center', opacity: 0.6 }}>No hay pedidos en el historial.</div>
+          ) : (
+            ordersHistory.map(order => (
+              <div key={order.id} className="glass" style={{ border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
+                <div style={{ padding: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                  <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Pedido #{order.id}</div>
+                    <div style={{ fontSize: '0.85rem' }}>{new Date(order.created_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.6rem', display: 'block', opacity: 0.7 }}>VENTA</span>
+                      <span style={{ fontWeight: 'bold' }}>${parseFloat(order.total_price).toFixed(2)}</span>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.6rem', display: 'block', opacity: 0.7 }}>COSTO</span>
+                      <span style={{ color: '#f87171' }}>${parseFloat(order.total_cost || 0).toFixed(2)}</span>
+                    </div>
+                    <div style={{ textAlign: 'center' }}>
+                      <span style={{ fontSize: '0.6rem', display: 'block', opacity: 0.7 }}>GANANCIA</span>
+                      <span style={{ color: '#4ade80', fontWeight: 'bold' }}>${parseFloat(order.total_profit || 0).toFixed(2)}</span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem' }}>
+                      <button 
+                        onClick={() => setExpandedHistory(expandedHistory === order.id ? null : order.id)}
+                        className="btn glass" 
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', border: '1px solid var(--primary)' }}
+                      >
+                        {expandedHistory === order.id ? 'Ocultar' : 'Detalles'}
+                      </button>
+                      <button 
+                        onClick={() => deleteOrderHistory(order.id)}
+                        className="btn" 
+                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'rgba(244,63,94,0.1)', color: '#f43f5e' }}
+                        disabled={deletingId === order.id}
+                      >
+                        {deletingId === order.id ? '...' : 'Eliminar'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {expandedHistory === order.id && (
+                  <div style={{ padding: '0 1.2rem 1.5rem 1.2rem', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.1)' }}>
+                    <div className="table-responsive">
+                      <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', marginTop: '1rem', fontSize: '0.85rem' }}>
+                        <thead>
+                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left', opacity: 0.7 }}>
+                            <th style={{ padding: '0.5rem' }}>Articulo</th>
+                            <th style={{ padding: '0.5rem' }}>Talla</th>
+                            <th style={{ padding: '0.5rem' }}>Cant.</th>
+                            <th style={{ padding: '0.5rem' }}>Venta</th>
+                            <th style={{ padding: '0.5rem' }}>Costo</th>
+                            <th style={{ padding: '0.5rem' }}>Estado / Notas</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.isArray(order.items) && order.items.map((it, idx) => (
+                            <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', verticalAlign: 'middle' }}>
+                              <td style={{ padding: '0.5rem' }}>
+                                {it.name}
+                                {it.comment && <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>Cli: {it.comment}</div>}
+                              </td>
+                              <td style={{ padding: '0.5rem' }}>{it.size}</td>
+                              <td style={{ padding: '0.5rem' }}>{it.quantity}</td>
+                              <td style={{ padding: '0.5rem' }}>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
+                                  <span>$</span>
+                                  <input 
+                                    type="number"
+                                    className="glass"
+                                    style={{ width: '70px', padding: '0.2rem', fontSize: '0.85rem' }}
+                                    defaultValue={parseFloat(it.price).toFixed(2)}
+                                    onBlur={(e) => updateOrderHistoryItem(order.id, idx, 'price', e.target.value)}
+                                  />
+                                </div>
+                              </td>
+                              <td style={{ padding: '0.5rem' }}>${parseFloat(it.cost || 0).toFixed(2)}</td>
+                              <td style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                                <button 
+                                  onClick={() => updateOrderHistoryItem(order.id, idx, 'sold', !it.sold)}
+                                  className="btn"
+                                  style={{ 
+                                    padding: '0.2rem 0.5rem', fontSize: '0.65rem', minWidth: '70px',
+                                    background: it.sold ? 'rgba(74, 222, 128, 0.2)' : 'rgba(239, 129, 30, 0.2)',
+                                    color: it.sold ? '#4ade80' : '#ef811e',
+                                    border: `1px solid ${it.sold ? '#4ade80' : '#ef811e'}`
+                                  }}
+                                >
+                                  {it.sold ? '✓ VENDIDO' : 'PENDIENTE'}
+                                </button>
+                                <textarea 
+                                  placeholder="Nota admin..."
+                                  className="glass"
+                                  style={{ 
+                                    padding: '0.3rem 0.5rem', fontSize: '0.75rem', width: '180px', 
+                                    height: '45px', resize: 'vertical', display: 'block'
+                                  }}
+                                  defaultValue={it.admin_note || ''}
+                                  onBlur={(e) => updateOrderHistoryItem(order.id, idx, 'admin_note', e.target.value)}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </section>
     </div>
   );
 };
 
 const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
-  <div className="glass" style={{ padding: '0.6rem', display: 'flex', gap: '0.6rem', alignItems: 'center', marginBottom: '0.6rem', position: 'relative' }}>
-    <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.5rem', padding: '2px 4px', borderRadius: '4px 0 4px 0', zIndex: 1 }}>
+  <div className="glass" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '0', position: 'relative', height: '100%' }}>
+    <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.55rem', padding: '3px 6px', borderRadius: '4px 0 8px 0', zIndex: 1, fontWeight: 'bold' }}>
         {p.type === 'order' ? 'BAJO PEDIDO' : 'STOCK'}
     </div>
-    <div style={{ position: 'absolute', bottom: '0.6rem', left: '0.6rem', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.4rem', padding: '1px 3px', borderRadius: '2px', zIndex: 1, letterSpacing: '0.5px' }}>
-        {p.category?.toUpperCase() || 'ADULTO'}
+    <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', zIndex: 1 }}>
+        {p.is_favorite && <span style={{ color: '#fbbf24', fontSize: '1.2rem', textShadow: '0 0 10px rgba(0,0,0,0.5)' }}>★</span>}
     </div>
-    <img 
-      src={p.image_url} 
-      style={{ width: '45px', height: '45px', borderRadius: '4px', cursor: 'zoom-in' }} 
-      alt="" 
-      onMouseEnter={() => onHover(p.image_url)}
-      onMouseLeave={() => onHover(null)}
-    />
-    <div style={{ flex: 1 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-        <span style={{ color: 'var(--primary)', fontSize: '0.7rem', fontWeight: 'bold' }}>#{p.short_id}</span>
-        <input 
-          type="text" 
+    <div style={{ position: 'relative', width: '100%', aspectRatio: '1/1', overflow: 'hidden', borderRadius: '8px' }}>
+        <img 
+          src={p.image_url} 
+          style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
+          alt="" 
+          onMouseEnter={() => onHover(p.image_url)}
+          onMouseLeave={() => onHover(null)}
+        />
+        <div style={{ position: 'absolute', bottom: '0', left: '0', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.5rem', padding: '2px 5px', borderRadius: '0 4px 0 0', zIndex: 1 }}>
+            {p.category?.toUpperCase() || 'ADULTO'}
+        </div>
+    </div>
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.5rem' }}>
+        <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold' }}>#{p.short_id}</span>
+        <textarea 
           defaultValue={p.name}
           onBlur={(e) => {
             if (e.target.value !== p.name) onUpdate(p.id, 'name', e.target.value);
@@ -631,20 +855,19 @@ const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
           }}
           style={{ 
             background: 'none', border: 'none', color: 'white', width: '100%', 
-            fontSize: '0.85rem', fontWeight: 'bold', borderBottom: '1px transparent solid',
-            outline: 'none', padding: '2px 0'
+            fontSize: '0.85rem', fontWeight: 'bold', outline: 'none', padding: '0',
+            resize: 'none', height: '2.5rem', lineHeight: '1.2'
           }}
           className="inline-edit"
           title="Clic para editar nombre"
         />
       </div>
-      <div style={{ display: 'flex', gap: '0.3rem', marginTop: '0.2rem' }}>
-        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem' }}>+</button>
-        <button onClick={() => onEdit(p)} className="btn" style={{ padding: '0.2rem 0.5rem', fontSize: '0.8rem', background: '#3b82f6' }}>E</button>
-        <button onClick={() => onDelete(p.id)} style={{ color: '#ff4444', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', padding: '0 0.5rem' }}>×</button>
+      <div style={{ display: 'flex', gap: '0.4rem', marginTop: 'auto' }}>
+        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ flex: 2, padding: '0.4rem', fontSize: '0.8rem', fontWeight: 'bold' }}>AGREGAR +</button>
+        <button onClick={() => onEdit(p)} className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem', background: 'rgba(255,255,255,0.1)' }}>EDIT</button>
+        <button onClick={() => onDelete(p.id)} style={{ color: '#ff4444', background: 'rgba(255,0,0,0.1)', border: 'none', cursor: 'pointer', borderRadius: '4px', padding: '0 0.6rem' }}>×</button>
       </div>
     </div>
-    {p.is_favorite && <div style={{ position: 'absolute', top: '0', right: '0', color: '#fbbf24', fontSize: '1rem', padding: '2px' }}>★</div>}
   </div>
 );
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import Loader from '../components/Loader';
 
 const Catalog = () => {
   const [products, setProducts] = useState([]);
@@ -16,14 +17,21 @@ const Catalog = () => {
   }, []);
 
   const fetchProducts = async () => {
+    const startTime = Date.now();
     try {
       const response = await fetch('/api/products');
       const data = await response.json();
       setProducts(data);
-      setLoading(false);
     } catch (error) {
       console.error("Error products:", error);
-      setLoading(false);
+    } finally {
+      // Garantizar que la animación se vea al menos 800ms
+      const elapsedTime = Date.now() - startTime;
+      const remainingTime = Math.max(0, 800 - elapsedTime);
+      
+      setTimeout(() => {
+        setLoading(false);
+      }, remainingTime);
     }
   };
 
@@ -48,7 +56,7 @@ const Catalog = () => {
         padding: '1rem 0', borderBottom: '1px solid var(--glass-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }} onClick={() => navigate('/')} className="pointer">
-          <img src="/logo.png" alt="DEPORTUX" style={{ height: '40px', cursor: 'pointer' }} />
+          <img src="/logo.png" alt="DEPORTUX" style={{ height: '60px', cursor: 'pointer' }} />
         </div>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Elegancia Deportiva</span>
@@ -72,6 +80,8 @@ const Catalog = () => {
           Tu Estilo, <br/> Bajo Tus Reglas
         </h1>
       </section>
+
+      <Loader show={loading} />
 
       {currentCategory === 'home' ? (
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginTop: '2rem' }}>
@@ -124,16 +134,12 @@ const Catalog = () => {
             />
           </div>
           
-          {loading ? (
-             <div style={{ textAlign: 'center', padding: '5rem' }}><p>Cargando...</p></div>
-          ) : (
-            <div className="grid">
-              {filteredProducts.map(product => (
-                <ProductCard key={product.id} product={product} onOpenImage={setSelectedImage} />
-              ))}
-              {filteredProducts.length === 0 && <p style={{ textAlign: 'center', width: '100%', opacity: 0.5 }}>Próximamente más modelos...</p>}
-            </div>
-          )}
+          <div className="grid">
+            {filteredProducts.map(product => (
+              <ProductCard key={product.id} product={product} onOpenImage={setSelectedImage} />
+            ))}
+            {filteredProducts.length === 0 && <p style={{ textAlign: 'center', width: '100%', opacity: 0.5 }}>Próximamente más modelos...</p>}
+          </div>
         </section>
       )}
 

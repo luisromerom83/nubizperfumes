@@ -65,7 +65,21 @@ export default async function handler(request, response) {
       return response.status(201).json(result.rows[0]);
     }
 
-    // 4. DELETE: Borrar pedido del historial
+    // 4. PUT: Actualizar un pedido (ej. marcar items como vendidos o cambiar precios)
+    if (request.method === 'PUT') {
+      const { id, items, total_price, total_cost, total_profit } = request.body;
+      await pool.sql`
+        UPDATE orders 
+        SET items = ${JSON.stringify(items)},
+            total_price = ${total_price},
+            total_cost = ${total_cost},
+            total_profit = ${total_profit}
+        WHERE id = ${id};
+      `;
+      return response.status(200).json({ message: 'Pedido actualizado' });
+    }
+
+    // 5. DELETE: Borrar pedido del historial
     if (request.method === 'DELETE') {
       const { id } = request.query;
       await pool.sql`DELETE FROM orders WHERE id = ${id};`;

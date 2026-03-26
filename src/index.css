@@ -1,12 +1,13 @@
 :root {
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --bg-gradient: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%);
-  --glass-bg: rgba(255, 255, 255, 0.05);
+  --primary: #ef811e; /* Naranja del logo */
+  --primary-hover: #d66f10;
+  --bg-color: #062746; /* Registro exacto solicitado */
+  --bg-gradient: linear-gradient(135deg, #062746 0%, #041a2f 100%);
+  --glass-bg: rgba(255, 255, 255, 0.03);
   --glass-border: rgba(255, 255, 255, 0.1);
-  --text-main: #f8fafc;
-  --text-muted: #94a3b8;
-  --accent: #f43f5e;
+  --text-main: #ffffff;
+  --text-muted: #cbd5e1;
+  --accent: #ef811e;
   --radius-lg: 1rem;
   --radius-md: 0.75rem;
   --font-family: 'Outfit', sans-serif;
@@ -145,4 +146,53 @@ h1 {
 @keyframes fadeOutExit {
   0% { opacity: 1; transform: scale(1); }
   100% { opacity: 0; transform: scale(0.9) translateX(50px); filter: blur(10px); }
+}
+
+.loader-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: var(--bg-color);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  transition: opacity 0.5s ease-out, visibility 0.5s;
+}
+
+.loader-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+
+.loader-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2rem;
+}
+
+.loader-logo {
+  height: 100px;
+  animation: pulseLogo 2s ease-in-out infinite;
+}
+
+.loader-spinner {
+  width: 50px;
+  height: 50px;
+  border: 3px solid rgba(255, 255, 255, 0.1);
+  border-top-color: var(--primary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes pulseLogo {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; filter: drop-shadow(0 0 15px var(--primary)); }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
