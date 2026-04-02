@@ -341,6 +341,21 @@ const AdminDashboard = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleClone = (p) => {
+    setNewProduct({ 
+      name: `${p.name} (Copia)`, 
+      size: p.size, 
+      price: p.price, 
+      category: p.category || 'Adulto', 
+      is_favorite: p.is_favorite || false, 
+      image: null, 
+      stock_quantity: p.stock_quantity || 0 
+    });
+    setEditingId(null); // Para que se guarde como nuevo
+    setCurrentImageURL(p.image_url);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   const updateProductAttribute = async (id, attribute, value) => {
     const product = products.find(p => p.id === id);
     if (!product) return;
@@ -489,7 +504,7 @@ const AdminDashboard = () => {
               <div style={{ padding: '0 1rem 1rem 1rem' }}>
                   <div className="admin-grid">
                       {products.filter(p => p.category === 'Niño').map(p => (
-                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
+                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onClone={handleClone} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
                       ))}
                   </div>
               </div>
@@ -509,7 +524,7 @@ const AdminDashboard = () => {
               <div style={{ padding: '0 1rem 1rem 1rem' }}>
                   <div className="admin-grid">
                       {products.filter(p => !p.category || p.category === 'Adulto').map(p => (
-                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
+                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onClone={handleClone} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
                       ))}
                   </div>
               </div>
@@ -821,7 +836,7 @@ const AdminDashboard = () => {
   );
 };
 
-const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
+const AdminItem = ({ p, onAdd, onDelete, onEdit, onClone, onHover, onUpdate }) => (
   <div className="glass" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '0', position: 'relative', height: '100%' }}>
     <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.55rem', padding: '3px 6px', borderRadius: '4px 0 8px 0', zIndex: 1, fontWeight: 'bold' }}>
         {p.type === 'order' ? 'BAJO PEDIDO' : 'STOCK'}
@@ -866,10 +881,11 @@ const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
           title="Clic para editar nombre"
         />
       </div>
-      <div style={{ display: 'flex', gap: '0.4rem', marginTop: 'auto' }}>
-        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ flex: 2, padding: '0.4rem', fontSize: '0.8rem', fontWeight: 'bold' }}>AGREGAR +</button>
-        <button onClick={() => onEdit(p)} className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.8rem', background: 'rgba(255,255,255,0.1)' }}>EDIT</button>
-        <button onClick={() => onDelete(p.id)} style={{ color: '#ff4444', background: 'rgba(255,0,0,0.1)', border: 'none', cursor: 'pointer', borderRadius: '4px', padding: '0 0.6rem' }}>×</button>
+      <div style={{ display: 'flex', gap: '0.4rem', marginTop: 'auto', flexWrap: 'wrap' }}>
+        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ flex: '1 0 100%', padding: '0.4rem', fontSize: '0.8rem', fontWeight: 'bold' }}>AGREGAR +</button>
+        <button onClick={() => onClone(p)} title="Clonar Producto" className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem', background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', border: '1px solid var(--primary)' }}>CLON</button>
+        <button onClick={() => onEdit(p)} className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem', background: 'rgba(255,255,255,0.1)' }}>EDIT</button>
+        <button onClick={() => onDelete(p.id)} style={{ flex: 0, color: '#ff4444', background: 'rgba(255,0,0,0.1)', border: 'none', cursor: 'pointer', borderRadius: '4px', padding: '0 0.6rem' }}>×</button>
       </div>
     </div>
   </div>
