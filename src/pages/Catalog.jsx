@@ -80,7 +80,7 @@ const Catalog = () => {
     
     cart.forEach(item => {
       const priceText = item.type === 'order' ? 'Cotizar' : `$${item.price}`;
-      message += `• ${item.quantity}x ${item.name} (${item.size || 'N/A'}) - ${priceText}\n`;
+      message += `• ${item.quantity}x [#${item.short_id}] ${item.name} (${item.size || 'N/A'}) - ${priceText}\n`;
       if (item.type !== 'order') total += item.price * item.quantity;
     });
 
