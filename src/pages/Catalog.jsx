@@ -301,19 +301,23 @@ const CategoryCard = ({ title, desc, img, onClick }) => (
 
 const ProductCard = ({ product, onOpenImage, onAddToCart }) => {
   const isOrder = product.type === 'order';
+  const isOutOfStock = !isOrder && (product.stock_quantity !== undefined && product.stock_quantity <= 0);
+  
   return (
-    <div className="glass card">
+    <div className={`glass card ${isOutOfStock ? 'out-of-stock' : ''}`} style={{ opacity: isOutOfStock ? 0.7 : 1 }}>
       <div style={{ position: 'relative', cursor: 'zoom-in' }} onClick={() => onOpenImage(product.image_url)}>
-        <img src={product.image_url} alt={product.name} className="product-img" loading="lazy" />
+        <img src={product.image_url} alt={product.name} className="product-img" loading="lazy" style={{ filter: isOutOfStock ? 'grayscale(1)' : 'none' }} />
         <span className="badge" style={{ 
-          position: 'absolute', top: '1rem', left: '1rem', background: isOrder ? '#fbbf24' : '#10b981',
+          position: 'absolute', top: '1rem', left: '1rem', background: isOrder ? '#fbbf24' : (isOutOfStock ? '#ef4444' : '#10b981'),
           color: isOrder ? 'black' : 'white', fontWeight: 'bold', fontSize: '0.65rem'
-        }}>{isOrder ? 'BAJO PEDIDO' : 'EN EXISTENCIA'}</span>
+        }}>{isOrder ? 'BAJO PEDIDO' : (isOutOfStock ? 'AGOTADO' : 'EN EXISTENCIA')}</span>
         {!isOrder && (
           <span className="badge" style={{ 
             position: 'absolute', top: '1rem', right: '1rem', background: 'rgba(0,0,0,0.5)',
             backdropFilter: 'blur(5px)', color: 'white', fontSize: '0.65rem'
-          }}>Talla {product.size}</span>
+          }}>
+            Talla: {product.size} {product.type === 'stock' && `(${product.stock_quantity || 0} pzs)`}
+          </span>
         )}
         <span className="badge" style={{ 
           position: 'absolute', bottom: '1rem', left: '1rem', background: 'rgba(255,255,255,0.15)',
@@ -330,8 +334,8 @@ const ProductCard = ({ product, onOpenImage, onAddToCart }) => {
           <span className="price" style={{ color: isOrder ? '#fbbf24' : 'inherit' }}>
             {isOrder ? 'Cotizar' : `$${product.price}`}
           </span>
-          <button onClick={onAddToCart} className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>
-            {isOrder ? 'Consultar' : 'Añadir 🛒'}
+          <button onClick={onAddToCart} className="btn btn-primary" style={{ padding: '0.5rem 1rem' }} disabled={isOutOfStock}>
+            {isOrder ? 'Consultar' : (isOutOfStock ? 'Agotado' : 'Añadir 🛒')}
           </button>
         </div>
       </div>

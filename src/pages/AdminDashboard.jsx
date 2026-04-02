@@ -18,7 +18,7 @@ const AdminDashboard = () => {
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   
   const [newProduct, setNewProduct] = useState({ 
-    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null 
+    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null, stock_quantity: 0 
   });
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -135,6 +135,7 @@ const AdminDashboard = () => {
         category: newProduct.category || 'Adulto',
         is_favorite: newProduct.is_favorite || false,
         short_id: newProduct.short_id || '',
+        stock_quantity: parseInt(newProduct.stock_quantity) || 0,
         ...(editingId && { id: editingId })
       };
       await fetch('/api/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -328,12 +329,12 @@ const AdminDashboard = () => {
   };
 
   const resetForm = () => {
-    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null });
+    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null, stock_quantity: 0 });
     setEditingId(null); setCurrentImageURL('');
   };
 
   const handleEdit = (p) => {
-    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, short_id: p.short_id || '', image: null });
+    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, short_id: p.short_id || '', image: null, stock_quantity: p.stock_quantity || 0 });
     setEditingId(p.id); setCurrentImageURL(p.image_url);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -458,8 +459,11 @@ const AdminDashboard = () => {
                         <option value="order">Bajo Pedido</option>
                     </select>
                 </div>
-                <div className="form-grid-2">
+                <div className={newProduct.type === 'stock' ? "form-grid-3" : "form-grid-2"}>
                     <input type="number" placeholder="Precio ($)" required={newProduct.type === 'stock'} className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
+                    {newProduct.type === 'stock' && (
+                        <input type="number" placeholder="Existencia (Cant.)" className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.stock_quantity} onChange={e => setNewProduct({...newProduct, stock_quantity: e.target.value})} />
+                    )}
                     <input type="file" accept="image/*" className="glass" style={{ padding: '0.3rem', fontSize: '0.7rem', width: '100%', minWidth: 0 }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: '8px' }}>
@@ -827,6 +831,11 @@ const AdminItem = ({ p, onAdd, onDelete, onEdit, onHover, onUpdate }) => (
     <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.55rem', padding: '3px 6px', borderRadius: '4px 0 8px 0', zIndex: 1, fontWeight: 'bold' }}>
         {p.type === 'order' ? 'BAJO PEDIDO' : 'STOCK'}
     </div>
+    {p.type === 'stock' && (
+        <div style={{ position: 'absolute', top: '1.5rem', left: '0', background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '0.65rem', padding: '3px 8px', borderRadius: '0 4px 4px 0', zIndex: 1, border: '1px solid var(--primary)', borderLeft: 'none' }}>
+            {p.stock_quantity || 0} pzs
+        </div>
+    )}
     <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', zIndex: 1 }}>
         {p.is_favorite && <span style={{ color: '#fbbf24', fontSize: '1.2rem', textShadow: '0 0 10px rgba(0,0,0,0.5)' }}>★</span>}
     </div>
