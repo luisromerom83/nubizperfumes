@@ -48,21 +48,24 @@ export default async function handler(request, response) {
 
     // 3. POST (Crear)
     if (request.method === 'POST') {
-      const { name, size, price, imageURL, type, category, is_favorite, short_id, stock_quantity } = request.body;
+      const { name, size, price, imageURL, type, category, is_favorite, stock_quantity } = request.body;
       const result = await pool.sql`
-        INSERT INTO products (name, size, price, image_url, type, category, is_favorite, short_id, stock_quantity)
-        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'}, ${category || 'Adulto'}, ${is_favorite || false}, ${short_id || ''}, ${stock_quantity || 0})
+        INSERT INTO products (name, size, price, image_url, type, category, is_favorite, stock_quantity)
+        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'}, ${category || 'Adulto'}, ${is_favorite || false}, ${stock_quantity || 0})
         RETURNING *;
       `;
-      return response.status(201).json(result.rows[0]);
+      const newProd = result.rows[0];
+      const shortId = newProd.id.toString().padStart(4, '0');
+      const finalResult = await pool.sql`UPDATE products SET short_id = ${shortId} WHERE id = ${newProd.id} RETURNING *;`;
+      return response.status(201).json(finalResult.rows[0]);
     }
 
     // 4. PUT (Actualizar)
     if (request.method === 'PUT') {
-      const { id, name, size, price, imageURL, type, category, is_favorite, short_id, stock_quantity } = request.body;
+      const { id, name, size, price, imageURL, type, category, is_favorite, stock_quantity } = request.body;
       const result = await pool.sql`
         UPDATE products 
-        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}, category = ${category}, is_favorite = ${is_favorite}, short_id = ${short_id}, stock_quantity = ${stock_quantity}
+        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}, category = ${category}, is_favorite = ${is_favorite}, stock_quantity = ${stock_quantity}
         WHERE id = ${id}
         RETURNING *;
       `;

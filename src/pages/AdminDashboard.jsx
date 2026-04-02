@@ -18,7 +18,7 @@ const AdminDashboard = () => {
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   
   const [newProduct, setNewProduct] = useState({ 
-    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null, stock_quantity: 0 
+    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0 
   });
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
@@ -126,16 +126,18 @@ const AdminDashboard = () => {
         imageURL = blob.url;
       }
       const method = editingId ? 'PUT' : 'POST';
+      const stockQty = parseInt(newProduct.stock_quantity) || 0;
+      const calculatedType = stockQty > 0 ? 'stock' : 'order';
+
       const payload = {
         name: newProduct.name, 
-        size: (newProduct.type === 'order' && !newProduct.size) ? 'N/A' : newProduct.size,
-        price: (newProduct.type === 'order' && !newProduct.price) ? 0 : parseFloat(newProduct.price),
+        size: (calculatedType === 'order' && !newProduct.size) ? 'N/A' : newProduct.size,
+        price: (calculatedType === 'order' && !newProduct.price) ? 0 : parseFloat(newProduct.price),
         imageURL, 
-        type: newProduct.type,
+        type: calculatedType,
         category: newProduct.category || 'Adulto',
         is_favorite: newProduct.is_favorite || false,
-        short_id: newProduct.short_id || '',
-        stock_quantity: parseInt(newProduct.stock_quantity) || 0,
+        stock_quantity: stockQty,
         ...(editingId && { id: editingId })
       };
       await fetch('/api/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -329,12 +331,12 @@ const AdminDashboard = () => {
   };
 
   const resetForm = () => {
-    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, short_id: '', image: null, stock_quantity: 0 });
+    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0 });
     setEditingId(null); setCurrentImageURL('');
   };
 
   const handleEdit = (p) => {
-    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, short_id: p.short_id || '', image: null, stock_quantity: p.stock_quantity || 0 });
+    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, image: null, stock_quantity: p.stock_quantity || 0 });
     setEditingId(p.id); setCurrentImageURL(p.image_url);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -445,25 +447,18 @@ const AdminDashboard = () => {
             <h3>Añadir/Editar Producto</h3>
             <form onSubmit={handleCatalogSubmit} style={{ display: 'grid', gap: '0.8rem', marginTop: '1rem' }}>
                 <div className="prod-header-row" style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input type="text" placeholder="ID (4 díj)" className="glass prod-id-input" style={{ width: '85px', padding: '0.5rem' }} value={newProduct.short_id} onChange={e => setNewProduct({...newProduct, short_id: e.target.value})} />
                     <input type="text" placeholder="Nombre del Uniforme" required className="glass" style={{ flex: 1, padding: '0.5rem' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
                 </div>
-                <div className="form-grid-3">
-                    <input type="text" placeholder="Tallas" required={newProduct.type === 'stock'} className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.size} onChange={e => setNewProduct({...newProduct, size: e.target.value})} />
+                <div className="form-grid-2">
+                    <input type="text" placeholder="Tallas" required className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.size} onChange={e => setNewProduct({...newProduct, size: e.target.value})} />
                     <select className="glass" style={{ padding: '0.5rem', background: 'var(--bg-color)' }} value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
                         <option value="Adulto">Adulto</option>
                         <option value="Niño">Niño</option>
                     </select>
-                    <select className="glass" style={{ padding: '0.5rem', background: 'var(--bg-color)' }} value={newProduct.type} onChange={e => setNewProduct({...newProduct, type: e.target.value})}>
-                        <option value="stock">Existencia</option>
-                        <option value="order">Bajo Pedido</option>
-                    </select>
                 </div>
-                <div className={newProduct.type === 'stock' ? "form-grid-3" : "form-grid-2"}>
-                    <input type="number" placeholder="Precio ($)" required={newProduct.type === 'stock'} className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
-                    {newProduct.type === 'stock' && (
-                        <input type="number" placeholder="Existencia (Cant.)" className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.stock_quantity} onChange={e => setNewProduct({...newProduct, stock_quantity: e.target.value})} />
-                    )}
+                <div className="form-grid-3">
+                    <input type="number" placeholder="Precio ($)" className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
+                    <input type="number" placeholder="Stock (0 = Bajo Pedido)" className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.stock_quantity} onChange={e => setNewProduct({...newProduct, stock_quantity: e.target.value})} />
                     <input type="file" accept="image/*" className="glass" style={{ padding: '0.3rem', fontSize: '0.7rem', width: '100%', minWidth: 0 }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: '8px' }}>
