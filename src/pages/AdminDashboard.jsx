@@ -455,8 +455,8 @@ const AdminDashboard = () => {
         if (pg) finalCustomerId = pg.id;
       }
 
-      // Si el campo de pago está vacío, asumimos Total. Si puso 0, es 0.
-      const finalPaidAmount = salePaidAmount === '' ? totalAmount : (parseFloat(salePaidAmount) || 0);
+      // Si el campo de pago está vacío, ahora es Cero (Deuda Full)
+      const finalPaidAmount = salePaidAmount === '' ? 0 : parseFloat(salePaidAmount);
 
       await fetch('/api/sales', {
         method: 'POST', 
@@ -465,7 +465,7 @@ const AdminDashboard = () => {
           customer_id: finalCustomerId, 
           items: activeSaleItems, 
           total_amount: totalAmount, 
-          paid_amount: finalPaidAmount,
+          paid_amount: finalPaidAmount || 0,
           profit: totalAmount * 0.3
         })
       });
