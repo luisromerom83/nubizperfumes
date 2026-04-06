@@ -19,6 +19,8 @@ const AdminDashboard = () => {
     name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} 
   });
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
+  const [adminFilterType, setAdminFilterType] = useState('all'); // all, favorites, stock, order
   const [editingId, setEditingId] = useState(null);
   const [currentImageURL, setCurrentImageURL] = useState('');
   const [openCategory, setOpenCategory] = useState('Adulto');
@@ -716,15 +718,68 @@ const AdminDashboard = () => {
                 </form>
               </section>
 
+              {/* Filtros de Inventario Admin */}
+              <div style={{ marginBottom: '2rem', display: 'grid', gap: '1rem' }}>
+                <input 
+                  type="text" 
+                  placeholder="🔍 Buscar en inventario..." 
+                  className="glass" 
+                  style={{ width: '100%', padding: '1rem' }} 
+                  value={adminSearchQuery} 
+                  onChange={e => setAdminSearchQuery(e.target.value)} 
+                />
+                <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap' }}>
+                  {[
+                    { id: 'all', label: '🏟️ Todos', color: 'var(--primary)' },
+                    { id: 'favorites', label: '✨ Favoritos', color: '#fbbf24' },
+                    { id: 'stock', label: '📦 En Stock', color: '#10b981' },
+                    { id: 'order', label: '🚚 Bajo Pedido', color: '#60a5fa' }
+                  ].map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setAdminFilterType(f.id)}
+                      className="glass"
+                      style={{
+                        padding: '0.5rem 1rem',
+                        borderRadius: '99px',
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold',
+                        border: `1px solid ${adminFilterType === f.id ? f.color : 'rgba(255,255,255,0.1)'}`,
+                        background: adminFilterType === f.id ? `${f.color}22` : 'transparent',
+                        color: adminFilterType === f.id ? f.color : 'white',
+                      }}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {['Niño', 'Adulto'].map(cat => (
                 <div key={cat} style={{ marginBottom: '1.5rem' }}>
                   <div onClick={() => setOpenCategory(openCategory === cat ? null : cat)} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', cursor: 'pointer', marginBottom: '1rem' }}>
-                    <h4 style={{ margin: 0 }}>{cat.toUpperCase()} ({products.filter(p => (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat)).length})</h4>
+                    <h4 style={{ margin: 0 }}>{cat.toUpperCase()} ({products.filter(p => {
+                      const matchesCategory = (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat);
+                      const matchesSearch = p.name.toLowerCase().includes(adminSearchQuery.toLowerCase());
+                      let matchesFilter = true;
+                      if (adminFilterType === 'favorites') matchesFilter = p.is_favorite;
+                      if (adminFilterType === 'stock') matchesFilter = p.type === 'stock';
+                      if (adminFilterType === 'order') matchesFilter = p.type === 'order';
+                      return matchesCategory && matchesSearch && matchesFilter;
+                    }).length})</h4>
                     <span>{openCategory === cat ? '▲' : '▼'}</span>
                   </div>
-                  {openCategory === cat && (
+                  {(openCategory === cat || adminSearchQuery !== '' || adminFilterType !== 'all') && (
                     <div className="admin-grid">
-                      {products.filter(p => (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat)).map(p => (
+                      {products.filter(p => {
+                        const matchesCategory = (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat);
+                        const matchesSearch = p.name.toLowerCase().includes(adminSearchQuery.toLowerCase());
+                        let matchesFilter = true;
+                        if (adminFilterType === 'favorites') matchesFilter = p.is_favorite;
+                        if (adminFilterType === 'stock') matchesFilter = p.type === 'stock';
+                        if (adminFilterType === 'order') matchesFilter = p.type === 'order';
+                        return matchesCategory && matchesSearch && matchesFilter;
+                      }).map(p => (
                         <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={handleDelete} onEdit={handleEdit} onSell={addToSaleList} onHover={setHoveredImage} />
                       ))}
                     </div>
