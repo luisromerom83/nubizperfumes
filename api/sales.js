@@ -75,6 +75,44 @@ export default async function handler(request, response) {
 
       return response.status(200).json({ message: 'Sale re-assigned and balances updated' });
     }
+    // 5. DELETE (Process Return)
+    if (request.method === 'DELETE') {
+      const { id } = request.query;
+      
+      // 1. Get sale details to reverse impact
+      const { rows: saleRows } = await pool.query(`SELECT * FROM ${T_SALES} WHERE id = $1;`, [id]);
+      if (saleRows.length === 0) return response.status(404).json({ error: 'Sale not found' });
+      
+      const sale = saleRows[0];
+      const items = Array.isArray(sale.items) ? sale.items : JSON.parse(sale.items || '[]');
+      const debt = parseFloat(sale.total_amount) - parseFloat(sale.paid_amount);
+
+      // 2. Reverse Inventory (Stock)
+      for (const item of items) {
+        if (item.id && item.size) {
+          // Obtener stock actual para recalcular total
+          const { rows: prodRows } = await pool.query(`SELECT * FROM ${T_SALES.includes('test') ? 'test_products' : 'products'} WHERE id = $1`, [item.id]);
+          if (prodRows.length > 0) {
+            const p = prodRows[0];
+            const newStock = { ...p.stock_by_size };
+            newStock[item.size] = (parseInt(newStock[item.size]) || 0) + parseInt(item.quantity);
+            const newTotal = Object.values(newStock).reduce((a, b) => a + (parseInt(b) || 0), 0);
+            
+            await pool.query(`UPDATE ${T_SALES.includes('test') ? 'test_products' : 'products'} SET stock_by_size = $1, stock_quantity = $2 WHERE id = $3`, [JSON.stringify(newStock), newTotal, item.id]);
+          }
+        }
+      }
+
+      // 3. Reverse Customer Balance
+      if (sale.customer_id && debt !== 0) {
+        await pool.query(`UPDATE ${T_CUSTOMERS} SET balance = balance - $1 WHERE id = $2`, [debt, sale.customer_id]);
+      }
+
+      // 4. Delete the sale record
+      await pool.query(`DELETE FROM ${T_SALES} WHERE id = $1`, [id]);
+
+      return response.status(200).json({ message: 'Return processed, stock and balance restored' });
+    }
 
     return response.status(405).json({ error: 'Method not allowed' });
   } catch (error) {

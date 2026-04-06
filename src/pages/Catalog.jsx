@@ -9,6 +9,7 @@ const Catalog = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [cart, setCart] = useState([]);
   const [isCartVisible, setIsCartVisible] = useState(false);
+  const [filterType, setFilterType] = useState('all'); // all, favorites, stock, order
   
   const { catName } = useParams();
   const navigate = useNavigate();
@@ -56,7 +57,13 @@ const Catalog = () => {
     const matchesCategory = (currentCategory === 'Adulto' && (p.category === 'Adulto' || !p.category)) || 
                             (currentCategory === 'Niño' && p.category === 'Niño');
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
+    
+    let matchesFilter = true;
+    if (filterType === 'favorites') matchesFilter = p.is_favorite;
+    if (filterType === 'stock') matchesFilter = p.type === 'stock';
+    if (filterType === 'order') matchesFilter = p.type === 'order';
+
+    return matchesCategory && matchesSearch && matchesFilter;
   }).sort((a, b) => {
     // 1. Favoritos primero
     if (b.is_favorite !== a.is_favorite) return (b.is_favorite ? 1 : 0) - (a.is_favorite ? 1 : 0);
@@ -175,24 +182,56 @@ const Catalog = () => {
             <div style={{ height: '1px', background: 'var(--glass-border)', flexGrow: 1 }}></div>
           </div>
 
-          <div style={{ marginBottom: '2.5rem' }}>
-            <input 
-              type="text" 
-              placeholder="Buscar uniforme por nombre..." 
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="glass"
-              style={{ 
-                width: '100%', 
-                padding: '1rem 1.5rem', 
-                borderRadius: '99px', 
-                fontSize: '1rem',
-                border: '1px solid var(--glass-border)',
-                outline: 'none',
-                color: 'white',
-                background: 'rgba(255,255,255,0.03)'
-              }} 
-            />
+          <div style={{ marginBottom: '1.5rem' }}>
+            <div style={{ position: 'relative' }}>
+              <input 
+                type="text" 
+                placeholder="🔍 Buscar uniforme por nombre..." 
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="glass"
+                style={{ 
+                  width: '100%', 
+                  padding: '1.2rem 2rem', 
+                  borderRadius: '99px', 
+                  fontSize: '1.1rem',
+                  border: '1px solid var(--primary)',
+                  outline: 'none',
+                  color: 'white',
+                  background: 'rgba(16, 185, 129, 0.05)',
+                  boxShadow: '0 0 20px rgba(16, 185, 129, 0.1)'
+                }} 
+              />
+            </div>
+          </div>
+
+          {/* Filtros Rápidos */}
+          <div style={{ display: 'flex', gap: '0.8rem', marginBottom: '2.5rem', flexWrap: 'wrap' }}>
+            {[
+              { id: 'all', label: '🏟️ Todos', color: 'var(--primary)' },
+              { id: 'favorites', label: '✨ Favoritos', color: '#fbbf24' },
+              { id: 'stock', label: '📦 En Stock', color: '#10b981' },
+              { id: 'order', label: '🚚 Bajo Pedido', color: '#60a5fa' }
+            ].map(f => (
+              <button
+                key={f.id}
+                onClick={() => setFilterType(f.id)}
+                className="glass"
+                style={{
+                  padding: '0.6rem 1.2rem',
+                  borderRadius: '99px',
+                  fontSize: '0.85rem',
+                  fontWeight: 'bold',
+                  border: `1px solid ${filterType === f.id ? f.color : 'rgba(255,255,255,0.1)'}`,
+                  background: filterType === f.id ? `${f.color}22` : 'transparent',
+                  color: filterType === f.id ? f.color : 'white',
+                  cursor: 'pointer',
+                  transition: '0.3s'
+                }}
+              >
+                {f.label}
+              </button>
+            ))}
           </div>
           
           <div className="grid">

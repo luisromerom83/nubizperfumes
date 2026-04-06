@@ -291,6 +291,16 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleReturnSale = async (id) => {
+    if (!window.confirm("¿Procesar devolución? Los productos volverán al stock y el saldo del cliente se ajustará.")) return;
+    setIsUploading(true);
+    try {
+      await fetch(`/api/sales?id=${id}`, { method: 'DELETE' });
+      fetchSales(); fetchProducts(); fetchCustomers();
+      alert('Devolución procesada con éxito!');
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
+  };
+
   const handleReassignSale = async (saleId, newCustomerId) => {
     // Buscar si el nuevo cliente es Público General
     const pgCustomer = customers.find(c => c.name.toLowerCase().includes('público en general') || c.name.toLowerCase().includes('público general'));
@@ -833,6 +843,14 @@ const AdminDashboard = () => {
                                 >
                                   {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </select>
+                                <button 
+                                  onClick={() => handleReturnSale(s.id)} 
+                                  className="btn glass" 
+                                  style={{ padding: '0.2rem 0.6rem', fontSize: '0.7rem', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.2)' }}
+                                  title="Procesar Devolución"
+                                >
+                                  ↩️ Devolución
+                                </button>
                               </div>
                               <span style={{ color: isPaymentOnly ? '#10b981' : (parseFloat(s.total_amount) > parseFloat(s.paid_amount) ? '#f87171' : '#4ade80'), fontWeight: 'bold' }}>
                                 {isPaymentOnly ? `Abono: +$${parseFloat(s.paid_amount).toFixed(0)}` : `Venta: $${parseFloat(s.total_amount).toFixed(0)}`}
@@ -911,6 +929,13 @@ const AdminDashboard = () => {
                           <option value="">🛒 Venta Local</option>
                           {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
+                        <button 
+                          onClick={() => handleReturnSale(s.id)} 
+                          className="btn glass" 
+                          style={{ padding: '0.3rem 0.8rem', fontSize: '0.75rem', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.2)' }}
+                        >
+                          ↩️ Devolución
+                        </button>
                         <span style={{ opacity: 0.4, fontSize: '0.7rem' }}>#{s.id} | {new Date(s.created_at).toLocaleDateString()}</span>
                       </div>
                       <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', opacity: 0.8 }}>
