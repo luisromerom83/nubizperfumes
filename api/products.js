@@ -1,13 +1,18 @@
 import { createPool } from '@vercel/postgres';
 
 export default async function handler(request, response) {
-  const connectionString = "postgresql://neondb_owner:npg_XB3SU0AthRFV@ep-mute-math-amplqkgj-pooler.c-5.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+  const connectionString = process.env.POSTGRES_URL || "postgresql://neondb_owner:npg_XB3SU0AthRFV@ep-mute-math-amplqkgj-pooler.c-5.us-east-1.aws.neon.tech/neondb?channel_binding=require&sslmode=require";
+  const isLocal = request.headers.host && (request.headers.host.includes('localhost') || request.headers.host.includes('127.0.0.1'));
   const pool = createPool({ connectionString });
+  
+  // Dynamic table names for cloud isolation
+  const TABLE = isLocal ? 'test_products' : 'products';
 
   try {
-    // 1. Crear/Actualizar Tabla
-    await pool.sql`
-      CREATE TABLE IF NOT EXISTS products (
+    // 1. Crear/Actualizar Tabla (Test o Producicón)
+    // Usamos query manual para nombres de tabla dinámicos
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${TABLE} (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         size VARCHAR(50) NOT NULL,
@@ -17,65 +22,86 @@ export default async function handler(request, response) {
         category VARCHAR(50) DEFAULT 'Adulto',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
-    `;
+    `);
     
     // Aseguramos columnas necesarias
-    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'stock';`; } catch (e) {}
-    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Adulto';`; } catch (e) {}
-    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE;`; } catch (e) {}
-    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS short_id VARCHAR(10);`; } catch (e) {}
-    try { await pool.sql`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock_quantity INTEGER DEFAULT 0;`; } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'stock';`); } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Adulto';`); } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE;`); } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS short_id VARCHAR(10);`); } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS stock_quantity INTEGER DEFAULT 0;`); } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS stock_by_size JSONB DEFAULT '{}'::jsonb;`); } catch (e) {}
 
     // Migración para short_id si está vacío
     try {
-      await pool.sql`
-        UPDATE products 
+      await pool.query(`
+        UPDATE ${TABLE} 
         SET short_id = LPAD(id::text, 4, '0') 
         WHERE short_id IS NULL OR short_id = '';
-      `;
-    } catch (e) { console.error("Error migración ID:", e); }
+      `);
+    } catch (e) {}
 
     // 2. GET
     if (request.method === 'GET') {
-      const { test } = request.query;
-      if (test === 'true') {
-        const mockData = await import('./mock_products.json', { assert: { type: 'json' } });
-        return response.status(200).json(mockData.default || []);
-      }
-      const { rows } = await pool.sql`SELECT * FROM products ORDER BY created_at DESC;`;
-      return response.status(200).json(rows || []);
+      const result = await pool.query(`SELECT * FROM ${TABLE} ORDER BY created_at DESC;`);
+      return response.status(200).json(result.rows || []);
     }
 
-    // 3. POST (Crear)
+    // 3. POST (Crear o Actualizar Variantes)
     if (request.method === 'POST') {
-      const { name, size, price, imageURL, type, category, is_favorite, stock_quantity } = request.body;
-      const result = await pool.sql`
-        INSERT INTO products (name, size, price, image_url, type, category, is_favorite, stock_quantity)
-        VALUES (${name}, ${size}, ${price}, ${imageURL}, ${type || 'stock'}, ${category || 'Adulto'}, ${is_favorite || false}, ${stock_quantity || 0})
+      const { name, size, price, imageURL, type, category, is_favorite, stock_quantity, stock_by_size, find_existing } = request.body;
+      
+      // Buscar si ya existe el producto BASE (mismo nombre y categoría)
+      const { rows: existing } = await pool.query(`SELECT * FROM ${TABLE} WHERE name = $1 AND category = $2 LIMIT 1;`, [name, category || 'Adulto']);
+      
+      if (existing.length > 0) {
+        const prod = existing[0];
+        // Mezclar stock_by_size
+        const newStock = { ...(prod.stock_by_size || {}), ...(stock_by_size || {}) };
+        if (size && !newStock[size]) newStock[size] = stock_quantity || 0;
+        
+        // Calcular nuevo total y lista de tallas
+        const totalStock = Object.values(newStock).reduce((a, b) => a + (parseInt(b) || 0), 0);
+        const sizeList = Object.keys(newStock).filter(k => newStock[k] > 0).join(', ');
+
+        const result = await pool.query(`
+          UPDATE ${TABLE} 
+          SET stock_by_size = $1, stock_quantity = $2, size = $3, price = $4, image_url = $5, is_favorite = $6
+          WHERE id = $7
+          RETURNING *;
+        `, [JSON.stringify(newStock), totalStock, sizeList, price || prod.price, imageURL || prod.image_url, is_favorite !== undefined ? is_favorite : prod.is_favorite, prod.id]);
+        
+        return response.status(200).json(result.rows[0]);
+      }
+
+      const result = await pool.query(`
+        INSERT INTO ${TABLE} (name, size, price, image_url, type, category, is_favorite, stock_quantity, stock_by_size)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *;
-      `;
+      `, [name, size, price, imageURL, type || 'stock', category || 'Adulto', is_favorite || false, stock_quantity || 0, JSON.stringify(stock_by_size || {})]);
+      
       const newProd = result.rows[0];
       const shortId = newProd.id.toString().padStart(4, '0');
-      const finalResult = await pool.sql`UPDATE products SET short_id = ${shortId} WHERE id = ${newProd.id} RETURNING *;`;
+      const finalResult = await pool.query(`UPDATE ${TABLE} SET short_id = $1 WHERE id = $2 RETURNING *;`, [shortId, newProd.id]);
       return response.status(201).json(finalResult.rows[0]);
     }
 
     // 4. PUT (Actualizar)
     if (request.method === 'PUT') {
-      const { id, name, size, price, imageURL, type, category, is_favorite, stock_quantity } = request.body;
-      const result = await pool.sql`
-        UPDATE products 
-        SET name = ${name}, size = ${size}, price = ${price}, image_url = ${imageURL}, type = ${type}, category = ${category}, is_favorite = ${is_favorite}, stock_quantity = ${stock_quantity}
-        WHERE id = ${id}
+      const { id, name, size, price, imageURL, type, category, is_favorite, stock_quantity, stock_by_size } = request.body;
+      const result = await pool.query(`
+        UPDATE ${TABLE} 
+        SET name = $1, size = $2, price = $3, image_url = $4, type = $5, category = $6, is_favorite = $7, stock_quantity = $8, stock_by_size = $9
+        WHERE id = $10
         RETURNING *;
-      `;
+      `, [name, size, price, imageURL, type, category, is_favorite, stock_quantity, JSON.stringify(stock_by_size || {}), id]);
       return response.status(200).json(result.rows[0]);
     }
 
     // 5. DELETE
     if (request.method === 'DELETE') {
       const { id } = request.query;
-      await pool.sql`DELETE FROM products WHERE id = ${id};`;
+      await pool.query(`DELETE FROM ${TABLE} WHERE id = $1;`, [id]);
       return response.status(200).json({ message: 'Producto eliminado' });
     }
 

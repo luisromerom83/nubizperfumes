@@ -1,32 +1,53 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import * as XLSX from 'xlsx';
-import ExcelJS from 'exceljs';
+import * as ExcelJS from 'exceljs';
 import Loader from '../components/Loader';
 
 const AdminDashboard = () => {
   const [products, setProducts] = useState([]);
   const [ordersHistory, setOrdersHistory] = useState([]);
   const [activeOrderItems, setActiveOrderItems] = useState([]);
-  const [expandedSummary, setExpandedSummary] = useState({});
+  const isTestMode = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginData, setLoginData] = useState({ user: '', password: '' });
   const [isUploading, setIsUploading] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [deletingId, setDeletingId] = useState(null);
   const [hoveredImage, setHoveredImage] = useState(null);
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   
   const [newProduct, setNewProduct] = useState({ 
-    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0 
+    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} 
   });
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [editingId, setEditingId] = useState(null);
   const [currentImageURL, setCurrentImageURL] = useState('');
-  const [manualItem, setManualItem] = useState({ name: '', size: '', quantity: 1, comment: '' });
-  const [openCategory, setOpenCategory] = useState(null); // Accordion: 'Adulto', 'Niño' o null
-  const [expandedHistory, setExpandedHistory] = useState(null); // ID del pedido expandido en el historial
-  const [isOrderOpen, setIsOrderOpen] = useState(false); // Floating side panel
+  const [openCategory, setOpenCategory] = useState('Adulto');
+  const [expandedHistory, setExpandedHistory] = useState(null);
+  const [isOrderOpen, setIsOrderOpen] = useState(false);
+  const [activeTab, setActiveTab] = useState('inventory');
+  const [customers, setCustomers] = useState([]);
+  const [sales, setSales] = useState([]);
+  const [newCustomer, setNewCustomer] = useState({ name: '', phone: '' });
+  const [reservations, setReservations] = useState([]);
+  const [selectedCustomerId, setSelectedCustomerId] = useState(null);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [generalAbonoAmount, setGeneralAbonoAmount] = useState('');
+  const [activeSaleItems, setActiveSaleItems] = useState([]);
+  const [isSaleOpen, setIsSaleOpen] = useState(false);
+  const [saleCustomerId, setSaleCustomerId] = useState('');
+  const [salePaidAmount, setSalePaidAmount] = useState('');
+
+  const [availableSizes, setAvailableSizes] = useState(() => {
+    const saved = localStorage.getItem('deportux_available_sizes');
+    if (!saved) return { Adulto: ['S', 'M', 'L', 'XL'], Niño: ['2', '4', '6', '8', '10', '12', '14', '16'] };
+    const parsed = JSON.parse(saved);
+    if (Array.isArray(parsed)) return { Adulto: parsed, Niño: [] };
+    return parsed;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('deportux_available_sizes', JSON.stringify(availableSizes));
+  }, [availableSizes]);
 
   useEffect(() => {
     const init = async () => {
@@ -36,33 +57,56 @@ const AdminDashboard = () => {
         await Promise.all([
           fetchProducts(),
           fetchOrdersHistory(),
-          fetchDraft()
+          fetchDraft(),
+          fetchCustomers(),
+          fetchSales(),
+          fetchReservations()
         ]);
       }
       setLoading(false);
     };
     init();
   }, []);
-
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchDraft();
+    // Auto-crear Público General si no existe (Caso-insensible)
+    if (isAuthenticated && !loading && customers.length > 0) {
+      const exists = customers.find(c => c.name.toLowerCase().includes('público') && c.name.toLowerCase().includes('general'));
+      if (!exists) {
+        fetch('/api/customers', { 
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, 
+          body: JSON.stringify({ name: 'Público en General', phone: '0000000000' }) 
+        }).then(() => fetchCustomers());
+      }
     }
-  }, [isAuthenticated]);
+  }, [customers.length, isAuthenticated, loading]);
+
+  const fetchProducts = async () => {
+    try { 
+      const r = await fetch('/api/products'); 
+      if (!r.ok) throw new Error('Network error');
+      setProducts(await r.json()); 
+    } catch(e) {} 
+  };
+  const fetchOrdersHistory = async () => {
+    try { const r = await fetch('/api/orders'); setOrdersHistory(await r.json()); } catch(e) { console.error(e); }
+  };
+  const fetchCustomers = async () => {
+    try { const r = await fetch('/api/customers'); setCustomers(await r.json()); } catch(e) { console.error(e); }
+  };
+  const fetchSales = async () => {
+    try { const r = await fetch('/api/sales'); setSales(await r.json()); } catch(e) { console.error(e); }
+  };
+  const fetchReservations = async () => {
+    try { const r = await fetch('/api/reservations'); setReservations(await r.json()); } catch(e) { console.error(e); }
+  };
 
   const fetchDraft = async () => {
     try {
-      const resp = await fetch('/api/orders?type=draft');
-      const data = await resp.json();
-      if (data && data.length) {
-        setActiveOrderItems(data);
-      } else {
-        const cached = localStorage.getItem('deportux_draft_order');
-        if (cached) setActiveOrderItems(JSON.parse(cached));
-      }
+      const r = await fetch('/api/orders?type=draft');
+      const items = await r.json();
+      if (items.length > 0) setActiveOrderItems(items);
       setIsDraftLoaded(true);
-    } catch (e) {
-      console.error("Error fetching draft:", e);
+    } catch(e) {
       const cached = localStorage.getItem('deportux_draft_order');
       if (cached) setActiveOrderItems(JSON.parse(cached));
       setIsDraftLoaded(true);
@@ -72,50 +116,33 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (isAuthenticated && isDraftLoaded) {
       localStorage.setItem('deportux_draft_order', JSON.stringify(activeOrderItems));
-      
-      // Sincronización con el servidor (Debounced 1s)
       const timer = setTimeout(() => {
         fetch('/api/orders?type=draft', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ items: activeOrderItems })
-        }).catch(e => console.error("Error sincronizando borrador:", e));
+        }).catch(e => {}); // Silent catch for local dev sync
       }, 1000);
-
       return () => clearTimeout(timer);
+    } else if (isDraftLoaded) {
+       localStorage.setItem('deportux_draft_order', JSON.stringify(activeOrderItems));
     }
   }, [activeOrderItems, isAuthenticated, isDraftLoaded]);
 
-  const fetchProducts = async () => {
-    try {
-      const resp = await fetch('/api/products');
-      const data = await resp.json();
-      setProducts(Array.isArray(data) ? data : []);
-    } catch (e) { console.error(e); }
-  };
-
-  const fetchOrdersHistory = async () => {
-    try {
-      const resp = await fetch('/api/orders');
-      const data = await resp.json();
-      setOrdersHistory(Array.isArray(data) ? data : []);
-    } catch (e) { console.error(e); }
-  };
-
-  const fileToBase64 = (file) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = () => resolve(reader.result);
-      reader.onerror = (error) => reject(error);
-    });
-  };
+  const fileToBase64 = (file) => new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+  });
 
   const handleCatalogSubmit = async (e) => {
     e.preventDefault();
     setIsUploading(true);
+    const totalStock = Object.values(newProduct.stock_by_size).reduce((a, b) => a + (parseInt(b) || 0), 0);
+    let imageURL = currentImageURL;
+
     try {
-      let imageURL = currentImageURL;
       if (newProduct.image) {
         const base64Image = await fileToBase64(newProduct.image);
         const uploadResp = await fetch('/api/upload', {
@@ -126,767 +153,1130 @@ const AdminDashboard = () => {
         imageURL = blob.url;
       }
       const method = editingId ? 'PUT' : 'POST';
-      const stockQty = parseInt(newProduct.stock_quantity) || 0;
-      const calculatedType = stockQty > 0 ? 'stock' : 'order';
-
       const payload = {
-        name: newProduct.name, 
-        size: (calculatedType === 'order' && !newProduct.size) ? 'N/A' : newProduct.size,
-        price: (calculatedType === 'order' && !newProduct.price) ? 0 : parseFloat(newProduct.price),
-        imageURL, 
-        type: calculatedType,
-        category: newProduct.category || 'Adulto',
-        is_favorite: newProduct.is_favorite || false,
-        stock_quantity: stockQty,
-        ...(editingId && { id: editingId })
+        ...newProduct,
+        imageURL,
+        id: editingId,
+        stock_quantity: totalStock
       };
-      await fetch('/api/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-      alert('Guardado'); resetForm(); fetchProducts();
+      const pResp = await fetch('/api/products', { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+      if (!pResp.ok) throw new Error('Error al guardar producto');
+      resetForm(); fetchProducts();
     } catch (err) { alert(err.message); } finally { setIsUploading(false); }
   };
 
-  const deleteProduct = async (id) => {
-    if (window.confirm("¿Eliminar del catálogo?")) {
-      await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
-      setProducts(products.filter(p => p.id !== id));
-    }
+  const resetForm = () => {
+    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} });
+    setEditingId(null); setCurrentImageURL('');
   };
 
-  const deleteOrderHistory = async (id) => {
-    if (window.confirm("¿Borrar historial?")) {
-        setDeletingId(id);
-        setTimeout(async () => {
-            try {
-                const resp = await fetch(`/api/orders?id=${id}`, { method: 'DELETE' });
-                if (resp.ok) setOrdersHistory(prev => prev.filter(h => h.id !== id));
-            } catch (e) { console.error(e); }
-            setDeletingId(null);
-        }, 500);
-    }
-  };
-
-  const updateOrderHistoryItem = async (orderId, itemIndex, field, value) => {
-    const order = ordersHistory.find(o => o.id === orderId);
-    if (!order) return;
-    
-    const newItems = [...order.items];
-    // Asegurar que numéricos sean números
-    const formattedValue = (field === 'price' || field === 'cost' || field === 'quantity') ? parseFloat(value) || 0 : value;
-    newItems[itemIndex] = { ...newItems[itemIndex], [field]: formattedValue };
-    
-    // Recalcular totales del pedido
-    let newTotalPrice = 0;
-    let newTotalCost = 0;
-    newItems.forEach(it => {
-        newTotalPrice += (parseFloat(it.price) || 0) * (parseInt(it.quantity) || 1);
-        newTotalCost += (parseFloat(it.cost || 0) || 0) * (parseInt(it.quantity) || 1);
+  const handleEdit = (p) => {
+    setNewProduct({ 
+      name: p.name, size: p.size, price: p.price, type: p.type, 
+      category: p.category || 'Adulto', is_favorite: p.is_favorite || false, 
+      image: null, stock_quantity: p.stock_quantity || 0,
+      stock_by_size: p.stock_by_size || {}
     });
-    const newTotalProfit = newTotalPrice - newTotalCost;
+    setEditingId(p.id); setCurrentImageURL(p.image_url);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
 
-    // Actualizar estado local (incluyendo los nuevos totales para el encabezado del registro)
-    setOrdersHistory(prev => prev.map(o => o.id === orderId ? { 
-        ...o, 
-        items: newItems,
-        total_price: newTotalPrice,
-        total_cost: newTotalCost,
-        total_profit: newTotalProfit
-    } : o));
 
-    try {
-        await fetch('/api/orders', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                id: orderId, 
-                items: newItems,
-                total_price: newTotalPrice,
-                total_cost: newTotalCost,
-                total_profit: newTotalProfit
-            })
-        });
-    } catch (e) { console.error("Error updating order history:", e); }
+  const handleDelete = async (id) => {
+    if (window.confirm('¿Eliminar producto?')) {
+      try {
+        const resp = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+        if (!resp.ok) throw new Error('Error al eliminar');
+        fetchProducts();
+      } catch (e) { console.error(e); }
+    }
   };
 
   const addToOrderList = (p) => {
+    // If it has multiple sizes, we don't pick the 'comma string', we pick the first one or empty
+    const available = p.stock_by_size ? Object.keys(p.stock_by_size).filter(s => p.stock_by_size[s] > 0) : [];
+    const defaultSize = available.length === 1 ? available[0] : '';
+    
     setActiveOrderItems([...activeOrderItems, {
       orderId: Date.now(), id: p.id, name: p.name, price: parseFloat(p.price || 0),
-      cost: 0, // Nuevo campo de costo
-      size: p.size === 'N/A' ? '' : p.size, image_url: p.image_url, quantity: 1, comment: '',
-      category: p.category || 'Adulto'
+      sale_price: parseFloat(p.price || 0), cost: 0, 
+      size: defaultSize || (p.size && !p.size.includes(',') ? p.size : ''),
+      image_url: p.image_url, quantity: 1, comment: '', category: p.category || 'Adulto',
+      is_apartado: false, customer_id: null
     }]);
-  };
-
-  const addManualItem = () => {
-    if (!manualItem.name) return alert("Nombre?");
-    setActiveOrderItems([...activeOrderItems, {
-      orderId: Date.now(), id: 'manual', name: manualItem.name, price: 0, cost: 0,
-      size: manualItem.size, image_url: '/logo.png', quantity: parseInt(manualItem.quantity) || 1, comment: manualItem.comment
-    }]);
-    setManualItem({ name: '', size: '', quantity: 1, comment: '' });
+    setIsOrderOpen(true);
   };
 
   const updateOrderItem = (orderId, updates) => {
-    setActiveOrderItems(activeOrderItems.map(item => item.orderId === orderId ? { ...item, ...updates } : item));
+    let newItems = [...activeOrderItems];
+    const idx = newItems.findIndex(i => i.orderId === orderId);
+    if (idx === -1) return;
+    
+    let item = { ...newItems[idx], ...updates };
+    
+    // Auto-link to base product details without API fetch (Fast Lookup)
+    if (updates.size && updates.size !== newItems[idx].size) {
+      const baseProduct = products.find(p => p.name === item.name && (p.category || 'Adulto') === (item.category || 'Adulto'));
+      if (baseProduct) {
+        item.id = baseProduct.id;
+        item.image_url = baseProduct.image_url;
+        item.price = parseFloat(baseProduct.price);
+      }
+    }
+    
+    newItems[idx] = item;
+    setActiveOrderItems(newItems);
   };
 
-  const getTotal = () => {
-    const total = activeOrderItems.reduce((acc, i) => acc + (parseFloat(i.price) * (parseInt(i.quantity) || 1)), 0);
-    return isNaN(total) ? 0 : total;
+  const handleFinalizeOrder = async () => {
+    if (!activeOrderItems.length || !window.confirm("¿Finalizar pedido a proveedor?")) return;
+    setIsUploading(true);
+    try {
+      const totalVenta = activeOrderItems.reduce((acc, i) => acc + (parseFloat(i.sale_price) * i.quantity), 0);
+      const totalCosto = activeOrderItems.reduce((acc, i) => acc + (parseFloat(i.cost || 0) * i.quantity), 0);
+      
+      const verifiedItems = activeOrderItems.map(it => ({ ...it, received: false }));
+      
+      const orderResp = await fetch('/api/orders', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ items: verifiedItems, total_price: totalVenta, total_cost: totalCosto, total_profit: totalVenta - totalCosto, is_entered: false })
+      });
+      await orderResp.json();
+
+      setActiveOrderItems([]); localStorage.removeItem('deportux_draft_order');
+      fetchOrdersHistory(); fetchProducts(); setIsOrderOpen(false); 
+      alert('Pedido registrado en historial. No olvides "Ingresar a Inventario" cuando recibas la mercancía.');
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
   };
 
-  const getTotalCost = () => {
-    const total = activeOrderItems.reduce((acc, i) => acc + (parseFloat(i.cost || 0) * (parseInt(i.quantity) || 1)), 0);
-    return isNaN(total) ? 0 : total;
+  const toggleOrderItemReceived = async (order, itemIdx) => {
+    // 1. Optimistic Update
+    const rawItems = Array.isArray(order.items) ? order.items : JSON.parse(order.items || '[]');
+    const newItems = [...rawItems];
+    newItems[itemIdx] = { ...newItems[itemIdx], received: !newItems[itemIdx].received };
+    
+    const updatedOrder = { ...order, items: newItems };
+    setOrdersHistory(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+
+    // 2. Background sync
+    try {
+      await fetch('/api/orders', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrder)
+      });
+      // We don't strictly need fetchOrdersHistory() here unless we expect concurrent edits
+    } catch (e) { 
+      console.error(e);
+      // Revert if failed
+      fetchOrdersHistory();
+    }
+  };
+
+  const markAllAsReceived = async (order) => {
+    // 1. Optimistic Update
+    const rawItems = Array.isArray(order.items) ? order.items : JSON.parse(order.items || '[]');
+    const newItems = rawItems.map(it => ({ ...it, received: true }));
+    
+    const updatedOrder = { ...order, items: newItems };
+    setOrdersHistory(prev => prev.map(o => o.id === order.id ? updatedOrder : o));
+
+    try {
+      await fetch('/api/orders', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updatedOrder)
+      });
+    } catch (e) { 
+      console.error(e);
+      fetchOrdersHistory();
+    }
+  };
+
+  const handleReassignSale = async (saleId, newCustomerId) => {
+    // Buscar si el nuevo cliente es Público General
+    const pgCustomer = customers.find(c => c.name.toLowerCase().includes('público en general') || c.name.toLowerCase().includes('público general'));
+    const isPublic = !newCustomerId || (pgCustomer && String(newCustomerId) === String(pgCustomer.id));
+    
+    // Verificar si la venta tiene deuda
+    const sale = sales.find(s => s.id === saleId);
+    const hasDebt = sale && parseFloat(sale.total_amount) > parseFloat(sale.paid_amount);
+
+    if (isPublic && hasDebt) {
+      return alert("No se puede asignar una venta con deuda a Público General. Debe estar liquidada.");
+    }
+
+    if (!window.confirm("¿Cambiar el cliente de esta venta? Los saldos se ajustarán.")) return;
+    setIsUploading(true);
+    try {
+      await fetch('/api/sales', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: saleId, customer_id: newCustomerId === "" ? null : newCustomerId })
+      });
+      fetchSales(); fetchCustomers();
+      alert('Venta reasignada!');
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
+  };
+
+  const handleReceiveIntoInventory = async (order) => {
+    if (order.is_entered) return alert("Este pedido ya fue ingresado");
+    if (!window.confirm("¿Ingresar estos artículos al inventario? (Actualizará stock y apartados)")) return;
+    
+    setIsUploading(true);
+    try {
+      const allItems = Array.isArray(order.items) ? order.items : JSON.parse(order.items || '[]');
+      const receivedItems = allItems.filter(it => it.received);
+      
+      if (receivedItems.length === 0) return alert("No hay artículos marcados como recibidos.");
+      
+      if (receivedItems.length < allItems.length) {
+        if (!window.confirm(`Solo has marcado ${receivedItems.length} de ${allItems.length} artículos. ¿Deseas ingresar SOLO los marcados e IGNORAR el resto?`)) {
+          setIsUploading(false);
+          return;
+        }
+      }
+
+      // Agrupar cambios por producto para evitar sobrescritura (Race Condition)
+      const updatesMap = new Map();
+      const reservationsToCreate = [];
+
+      for (const item of receivedItems) {
+        if (item.is_apartado && item.customer_id) {
+          reservationsToCreate.push(item);
+        } else if (item.id !== 'manual') {
+          if (!updatesMap.has(item.id)) {
+            const p = products.find(x => String(x.id) === String(item.id));
+            if (p) {
+              updatesMap.set(item.id, { 
+                product: p, 
+                newStockBySize: { ...(p.stock_by_size || {}) } 
+              });
+            }
+          }
+          
+          const updateData = updatesMap.get(item.id);
+          if (updateData) {
+            updateData.newStockBySize[item.size] = (parseInt(updateData.newStockBySize[item.size]) || 0) + parseInt(item.quantity);
+          }
+        }
+      }
+
+      // 1. Procesar Apartados
+      for (const resItem of reservationsToCreate) {
+        await fetch('/api/reservations', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ product_id: resItem.id, customer_id: resItem.customer_id, order_id: order.id, quantity: resItem.quantity, price_at_reservation: resItem.sale_price || resItem.price, is_received: true })
+        });
+      }
+
+      // 2. Procesar Actualizaciones de Inventario Agregadas
+      for (const [prodId, data] of updatesMap.entries()) {
+        const newTotalStock = Object.values(data.newStockBySize).reduce((a, b) => a + (parseInt(b) || 0), 0);
+        await fetch('/api/products', {
+          method: 'PUT', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...data.product, stock_quantity: newTotalStock, stock_by_size: data.newStockBySize, imageURL: data.product.image_url })
+        });
+      }
+      await fetch('/api/orders', {
+        method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...order, is_entered: true })
+      });
+      fetchOrdersHistory(); fetchProducts(); fetchReservations();
+      alert('Inventario actualizado con éxito!');
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
+  };
+
+  const addToSaleList = (p) => {
+    const available = p.stock_by_size ? Object.keys(p.stock_by_size).filter(s => p.stock_by_size[s] > 0) : [];
+    const defaultSize = available.length === 1 ? available[0] : '';
+    
+    setActiveSaleItems([...activeSaleItems, {
+      saleId: Date.now(), id: p.id, name: p.name, price: parseFloat(p.price || 0),
+      size: defaultSize || '', image_url: p.image_url, quantity: 1, category: p.category || 'Adulto',
+      stock_by_size: p.stock_by_size || {}
+    }]);
+    setIsSaleOpen(true);
+  };
+
+  const updateSaleItem = (saleId, updates) => {
+    setActiveSaleItems(prev => prev.map(i => i.saleId === saleId ? { ...i, ...updates } : i));
+  };
+
+  const handleFinalizeSale = async () => {
+    if (!activeSaleItems.length || !window.confirm("¿Finalizar venta directa?")) return;
+
+    const totalAmount = activeSaleItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+    const paidAmount = parseFloat(salePaidAmount) || totalAmount;
+    
+    // Validar pago total para Público en General
+    const pgCustomer = customers.find(c => c.name.toLowerCase().includes('público en general') || c.name.toLowerCase().includes('público general'));
+    const isPublic = !saleCustomerId || (pgCustomer && String(saleCustomerId) === String(pgCustomer.id));
+    
+    if (isPublic && paidAmount < totalAmount) {
+      return alert("Las ventas a Público en General deben ser liquidadas totalmente (sin deuda).");
+    }
+
+    setIsUploading(true);
+    try {
+      // 1. Descontar stock para cada producto
+      for (const item of activeSaleItems) {
+        if (!item.size) throw new Error(`Selecciona talla para ${item.name}`);
+        const p = products.find(x => String(x.id) === String(item.id));
+        if (p) {
+          const newStock = { ...p.stock_by_size };
+          newStock[item.size] = (parseInt(newStock[item.size]) || 0) - parseInt(item.quantity);
+          const newTotal = Object.values(newStock).reduce((a, b) => a + (parseInt(b) || 0), 0);
+          
+          await fetch('/api/products', {
+            method: 'PUT', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ...p, stock_by_size: newStock, stock_quantity: newTotal, imageURL: p.image_url })
+          });
+        }
+      }
+
+      // 2. Crear registro de venta única
+      const totalAmount = activeSaleItems.reduce((acc, i) => acc + (i.price * i.quantity), 0);
+      
+      // Si no hay cliente, buscar el ID de Público General
+      let finalCustomerId = saleCustomerId || null;
+      if (!finalCustomerId) {
+        const pg = customers.find(c => c.name.toLowerCase().includes('público') && c.name.toLowerCase().includes('general'));
+        if (pg) finalCustomerId = pg.id;
+      }
+
+      await fetch('/api/sales', {
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          customer_id: finalCustomerId, 
+          items: activeSaleItems, 
+          total_amount: totalAmount, 
+          paid_amount: parseFloat(salePaidAmount) || totalAmount,
+          profit: totalAmount * 0.3
+        })
+      });
+
+      setActiveSaleItems([]); setSaleCustomerId(''); setSalePaidAmount('');
+      fetchProducts(); fetchSales(); fetchCustomers(); setIsSaleOpen(false);
+      alert("Venta registrada con éxito!");
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
+  };
+
+  const handleGeneralAbono = async (customerId, amount) => {
+    if (!amount || amount <= 0) return alert("Monto inválido");
+    setIsUploading(true);
+    try {
+      await fetch('/api/sales', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          customer_id: customerId, 
+          items: [{ name: "Abono a Cuenta General", quantity: 1, price: 0 }], 
+          total_amount: 0, 
+          paid_amount: parseFloat(amount), 
+          profit: 0
+        })
+      });
+      setGeneralAbonoAmount('');
+      fetchCustomers(); fetchSales();
+      alert('Abono registrado con éxito!');
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
+  };
+
+  const handleReservationPayment = async (reservation, amount, isFinal) => {
+    if (!amount || amount <= 0) return alert("Monto inválido");
+    setIsUploading(true);
+    try {
+      const newPaid = (parseFloat(reservation.paid_amount) || 0) + parseFloat(amount);
+      const totalDue = parseFloat(reservation.price_at_reservation) * parseInt(reservation.quantity);
+      const status = newPaid >= totalDue || isFinal ? 'Delivered' : 'Partial';
+
+      if (!isTestMode) {
+        // 1. Update Reservation
+        await fetch('/api/reservations', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: reservation.id, paid_amount: newPaid, status })
+        });
+
+        // 2. Log Sale
+        await fetch('/api/sales', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ 
+            customer_id: reservation.customer_id, 
+            items: JSON.stringify([{ name: reservation.product_name, q: reservation.quantity, size: reservation.product_size }]), 
+            total_amount: totalDue, 
+            paid_amount: amount, 
+            profit: 0 // TODO: Calcular profit real
+          })
+        });
+      } else {
+        // Simulated update for UI
+        setReservations(reservations.map(r => r.id === reservation.id ? { ...r, paid_amount: newPaid, status } : r));
+      }
+
+      fetchReservations(); fetchCustomers(); fetchSales();
+      alert(status === 'Delivered' ? 'Entregado y pagado!' : 'Abono registrado');
+      setPaymentAmount('');
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
+  };
+
+  const handleDeleteCustomer = async (id) => {
+    if (!window.confirm("¿Seguro que quieres eliminar este cliente? Se borrará permanentemente.")) return;
+    setIsUploading(true);
+    try {
+      await fetch(`/api/customers?id=${id}`, { method: 'DELETE' });
+      fetchCustomers();
+    } catch (e) { alert(e.message); } finally { setIsUploading(false); }
   };
 
   const getSummaryForItems = (itemsList) => {
     const summary = {};
     itemsList.forEach(item => {
       const key = `${item.name}-${item.size}`;
-      if (!summary[key]) {
-        summary[key] = { 
-          name: item.name, 
-          size: item.size, 
-          total: 0, 
-          items: [], 
-          image_url: item.image_url,
-          cost: item.cost || 0,
-          price: item.price || 0
-        };
-      }
-      const q = parseInt(item.quantity) || 1;
-      summary[key].total += q;
-      summary[key].items.push({ q, name: item.name, size: item.size, comment: item.comment });
+      if (!summary[key]) summary[key] = { name: item.name, size: item.size, total: 0, cost: item.cost || 0, price: item.sale_price || 0, image_url: item.image_url };
+      summary[key].total += parseInt(item.quantity);
     });
     return Object.values(summary);
   };
 
-  // Función para actualizar costos/precios masivamente desde el resumen
   const updateSummaryFinances = (name, size, field, value) => {
-    setActiveOrderItems(prev => prev.map(item => {
-        if (item.name === name && item.size === size) {
-            return { ...item, [field]: parseFloat(value) || 0 };
-        }
-        return item;
-    }));
+    setActiveOrderItems(prev => prev.map(i => (i.name === name && i.size === size) ? { ...i, [field]: parseFloat(value) || 0 } : i));
   };
 
   const downloadSummaryXLSX = async () => {
     const summary = getSummaryForItems(activeOrderItems);
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Pedido Proveedor');
-
-    // Configurar encabezados y anchos
-    worksheet.columns = [
-      { header: 'Cant.', key: 'q', width: 8 },
-      { header: 'Nombre del Uniforme', key: 'name', width: 35 },
-      { header: 'Talla', key: 'size', width: 10 },
-      { header: 'Miniatura', key: 'img', width: 15 }
-    ];
-
-    // Estilo de encabezado
-    const headerRow = worksheet.getRow(1);
-    headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
-    headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1D4ED8' } };
-    headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
-    headerRow.height = 25;
-
+    const ws = workbook.addWorksheet('Pedido');
+    ws.columns = [{ header: 'Cant', key: 'q', width: 10 }, { header: 'Nombre', key: 'n', width: 40 }, { header: 'Talla', key: 's', width: 15 }, { header: 'Imagen', key: 'i', width: 20 }];
     for (let i = 0; i < summary.length; i++) {
-        const g = summary[i];
-        const rowIndex = i + 2;
-        const row = worksheet.addRow({
-          q: g.total,
-          name: g.name,
-          size: g.size || 'Unica'
-        });
-        
-        row.height = 65; 
-        row.alignment = { vertical: 'middle', horizontal: 'center' };
-        row.getCell('name').alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
-
+      const g = summary[i];
+      ws.addRow({ q: g.total, n: g.name, s: g.size });
+      const row = ws.getRow(i + 2); row.height = 80; row.alignment = { vertical: 'middle', horizontal: 'center' };
+      if (g.image_url) {
         try {
-            if (g.image_url) {
-                const response = await fetch(g.image_url);
-                const buffer = await response.arrayBuffer();
-                const imageId = workbook.addImage({
-                    buffer: buffer,
-                    extension: 'jpeg',
-                });
-                worksheet.addImage(imageId, {
-                    tl: { col: 3, row: rowIndex - 1 },
-                    ext: { width: 80, height: 80 },
-                    editAs: 'oneCell'
-                });
-            }
-        } catch (e) { console.error("Error al cargar imagen para el Excel:", e); }
+          const img = await fetch(g.image_url).then(r => r.arrayBuffer());
+          const imgId = workbook.addImage({ buffer: img, extension: 'jpeg' });
+          ws.addImage(imgId, { tl: { col: 3, row: i + 1 }, ext: { width: 100, height: 100 } });
+        } catch(e) {}
+      }
     }
-
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `Pedido_Deportux_Visual_${new Date().toISOString().split('T')[0]}.xlsx`;
-    link.click();
-  };
-
-  const resetForm = () => {
-    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0 });
-    setEditingId(null); setCurrentImageURL('');
-  };
-
-  const handleEdit = (p) => {
-    setNewProduct({ name: p.name, size: p.size, price: p.price, type: p.type, category: p.category || 'Adulto', is_favorite: p.is_favorite || false, image: null, stock_quantity: p.stock_quantity || 0 });
-    setEditingId(p.id); setCurrentImageURL(p.image_url);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const handleClone = (p) => {
-    setNewProduct({ 
-      name: `${p.name} (Copia)`, 
-      size: p.size, 
-      price: p.price, 
-      category: p.category || 'Adulto', 
-      is_favorite: p.is_favorite || false, 
-      image: null, 
-      stock_quantity: p.stock_quantity || 0 
-    });
-    setEditingId(null); // Para que se guarde como nuevo
-    setCurrentImageURL(p.image_url);
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  };
-
-  const updateProductAttribute = async (id, attribute, value) => {
-    const product = products.find(p => p.id === id);
-    if (!product) return;
-    const updated = { ...product, [attribute]: value };
-    try {
-      await fetch('/api/products', { 
-        method: 'PUT', 
-        headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({
-          ...updated,
-          imageURL: updated.image_url // API expects imageURL
-        }) 
-      });
-      setProducts(products.map(p => p.id === id ? updated : p));
-    } catch (e) { console.error(e); }
+    const link = document.createElement("a"); link.href = URL.createObjectURL(blob); link.download = `Pedido_${new Date().toISOString().split('T')[0]}.xlsx`; link.click();
   };
 
   if (!isAuthenticated) return (
-     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '80vh' }}>
-       <div className="glass" style={{ padding: '3rem', width: '100%', maxWidth: '400px' }}>
-         <h2>DEPORTUX Admin</h2>
-         <form onSubmit={(e) => {
-           e.preventDefault();
-           if (loginData.user === 'admin' && loginData.password === 'Anitalavalatin4') {
-             setIsAuthenticated(true); sessionStorage.setItem('isAdminAuthenticated', 'true'); 
-             fetchProducts(); fetchOrdersHistory();
-           } else alert('Error');
-         }} style={{ display: 'grid', gap: '1rem', marginTop: '1rem' }}>
-           <input type="text" placeholder="User" className="glass" style={{ padding: '1rem' }} onChange={e => setLoginData({...loginData, user: e.target.value})} />
-           <input type="password" placeholder="Pass" className="glass" style={{ padding: '1rem' }} onChange={e => setLoginData({...loginData, password: e.target.value})} />
-           <button type="submit" className="btn btn-primary">Entrar</button>
-         </form>
-       </div>
-     </div>
+    <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f172a' }}>
+      <div className="glass" style={{ padding: '3rem', width: '350px' }}>
+        <h2 style={{ textAlign: 'center', color: 'var(--primary)', marginBottom: '2rem' }}>DEPORTUX ADMIN</h2>
+        <form onSubmit={e => { e.preventDefault(); if (loginData.user === 'admin' && loginData.password === 'Anitalavalatin4') { setIsAuthenticated(true); sessionStorage.setItem('isAdminAuthenticated', 'true'); fetchProducts(); fetchOrdersHistory(); fetchCustomers(); fetchSales(); } else alert('Credenciales incorrectas'); }} style={{ display: 'grid', gap: '1rem' }}>
+          <input type="text" placeholder="Usuario" className="glass" style={{ padding: '1rem' }} onChange={e => setLoginData({...loginData, user: e.target.value})} />
+          <input type="password" placeholder="Contraseña" className="glass" style={{ padding: '1rem' }} onChange={e => setLoginData({...loginData, password: e.target.value})} />
+          <button type="submit" className="btn btn-primary" style={{ padding: '1rem' }}>Entrar</button>
+        </form>
+      </div>
+    </div>
   );
 
   return (
     <div className="admin-page" style={{ maxWidth: '1400px', margin: '0 auto', padding: '2rem' }}>
-      <Loader show={loading} />
+      <Loader show={loading || isUploading} />
       <style>{`
-        * { box-sizing: border-box; }
-        .inline-edit:hover { background: rgba(255,255,255,0.05) !important; border-radius: 4px; }
-        .inline-edit:focus { background: rgba(255,255,255,0.1) !important; border-bottom: 1px solid var(--primary) !important; border-radius: 4px 4px 0 0; }
-        .collapse-header:hover { background: rgba(255,255,255,0.05); }
-        .form-grid-3 { display: grid; grid-template-columns: 1.2fr 1.1fr 1fr; gap: 0.5rem; }
-        .form-grid-2 { display: grid; grid-template-columns: 1fr 1.5fr; gap: 0.5rem; }
-        .search-result-item:hover { background: rgba(239, 129, 30, 0.2) !important; }
-        
-        .admin-grid {
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 1.5rem;
-          padding: 1rem 0;
-        }
-
-        .floating-order {
-          position: fixed; top: 0; right: 0; height: 100vh; width: 350px;
-          z-index: 1000; transition: transform 0.3s ease-in-out;
-          background: rgba(15, 23, 42, 0.95); backdrop-filter: blur(15px);
-          border-left: 1px solid rgba(255,255,255,0.1);
-          padding: 1.5rem; box-shadow: -5px 0 20px rgba(0,0,0,0.5);
-        }
+        .tabs { display: flex; gap: 0.5rem; margin-bottom: 2rem; border-bottom: 1px solid rgba(255,255,255,0.1); }
+        .tab-btn { padding: 1rem 2rem; background: rgba(255,255,255,0.03); border: none; color: white; cursor: pointer; border-radius: 12px 12px 0 0; font-weight: bold; transition: 0.3s; }
+        .tab-btn.active { background: var(--primary); }
+        .floating-order { position: fixed; top: 0; right: 0; height: 100vh; width: 400px; z-index: 1000; background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(20px); border-left: 1px solid rgba(255,255,255,0.1); padding: 2rem; transition: 0.3s; box-shadow: -10px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
         .floating-order.collapsed { transform: translateX(100%); }
-        .order-toggle {
-          position: fixed; right: 0; top: 50%; transform: translateY(-50%);
-          z-index: 1001; background: var(--primary); color: white;
-          padding: 1rem 0.5rem; border-radius: 10px 0 0 10px; cursor: pointer;
-          writing-mode: vertical-rl; text-orientation: mixed; font-weight: bold;
-        }
+        .floating-sale { position: fixed; top: 0; left: 0; height: 100vh; width: 400px; z-index: 1000; background: rgba(15, 23, 42, 0.98); backdrop-filter: blur(20px); border-right: 1px solid rgba(255,255,255,0.1); padding: 2rem; transition: 0.3s; box-shadow: 10px 0 30px rgba(0,0,0,0.5); display: flex; flex-direction: column; }
+        .floating-sale.collapsed { transform: translateX(-100%); }
+        .toggle-btn { position: fixed; top: 50%; z-index: 1001; background: var(--primary); color: white; padding: 1.5rem 0.6rem; border-radius: 12px 0 0 12px; cursor: pointer; writing-mode: vertical-rl; transform: translateY(-50%); font-weight: bold; }
+        .order-toggle { right: 0; border-radius: 12px 0 0 12px; }
+        .sale-toggle { left: 0; border-radius: 0 12px 12px 0; background: #10b981; }
 
-        .table-responsive {
-          width: 100%;
-          overflow-x: auto;
-          -webkit-overflow-scrolling: touch;
-          margin-top: 1rem;
-          border-radius: 8px;
+        /* Visibilidad Mejorada */
+        input::placeholder { color: rgba(255,255,255,0.5) !important; }
+        input, select, textarea { color: white !important; }
+        select option { background: #1e293b; color: white; }
+        .glass input, .glass select { border: 1px solid rgba(255,255,255,0.2) !important; }
+        
+        .admin-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1.5rem; }
+        .customer-card { background: rgba(255,255,255,0.03); padding: 1.5rem; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); }
+        
+        /* Animations */
+        @keyframes pulse-check {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+          100% { transform: scale(1); }
         }
-
-        @media (max-width: 1100px) { 
-          .admin-grid { grid-template-columns: repeat(2, 1fr); } 
-          .floating-order { width: 450px; }
-        }
-
-        @media (max-width: 768px) {
-          .admin-grid { grid-template-columns: 1fr; }
-          .form-grid-3, .form-grid-2 { grid-template-columns: 1fr !important; }
-          .admin-page { padding: 1rem !important; }
-          .floating-order { width: 100vw; }
-          .resumen-grid { grid-template-columns: 1fr !important; }
-          .prod-header-row { flex-direction: column !important; align-items: stretch !important; }
-          .prod-id-input { width: 100% !important; }
-        }
+        .animate-check { animation: pulse-check 0.3s ease-out; }
+        .item-row { transition: all 0.3s ease; }
+        .item-row.received { background: rgba(16, 185, 129, 0.08) !important; border-color: #10b981 !important; }
       `}</style>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', flexWrap: 'wrap', gap: '1rem' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-          <img src="/logo.png" alt="Logo" style={{ height: '60px' }} />
+      
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+        <img src="/logo.png" alt="Logo" style={{ height: '60px' }} />
+        <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <Link to="/" className="btn glass">Ver Tienda</Link>
+          <button onClick={() => { sessionStorage.clear(); window.location.reload(); }} className="btn" style={{ background: '#ef4444' }}>Cerrar Sesión</button>
         </div>
-        <Link to="/" className="btn">Ir al Catálogo</Link>
       </header>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '2rem' }}>
-        <div style={{ width: '100%', maxWidth: '800px', margin: '0 auto' }}>
-          <section className="glass" style={{ padding: '1.5rem', marginBottom: '2rem' }}>
-            <h3>Añadir/Editar Producto</h3>
-            <form onSubmit={handleCatalogSubmit} style={{ display: 'grid', gap: '0.8rem', marginTop: '1rem' }}>
-                <div className="prod-header-row" style={{ display: 'flex', gap: '0.5rem' }}>
-                    <input type="text" placeholder="Nombre del Uniforme" required className="glass" style={{ flex: 1, padding: '0.5rem' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
-                </div>
-                <div className="form-grid-2">
-                    <input type="text" placeholder="Tallas" required className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.size} onChange={e => setNewProduct({...newProduct, size: e.target.value})} />
-                    <select className="glass" style={{ padding: '0.5rem', background: 'var(--bg-color)' }} value={newProduct.category} onChange={e => setNewProduct({...newProduct, category: e.target.value})}>
-                        <option value="Adulto">Adulto</option>
-                        <option value="Niño">Niño</option>
-                    </select>
-                </div>
-                <div className="form-grid-3">
-                    <input type="number" placeholder="Precio ($)" className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
-                    <input type="number" placeholder="Stock (0 = Bajo Pedido)" className="glass" style={{ padding: '0.5rem', width: '100%', minWidth: 0 }} value={newProduct.stock_quantity} onChange={e => setNewProduct({...newProduct, stock_quantity: e.target.value})} />
-                    <input type="file" accept="image/*" className="glass" style={{ padding: '0.3rem', fontSize: '0.7rem', width: '100%', minWidth: 0 }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', background: 'rgba(255,255,255,0.05)', padding: '0.5rem', borderRadius: '8px' }}>
-                    <input 
-                      type="checkbox" 
-                      id="fav-check"
-                      checked={newProduct.is_favorite} 
-                      onChange={e => setNewProduct({...newProduct, is_favorite: e.target.checked})} 
-                    />
-                    <label htmlFor="fav-check" style={{ fontSize: '0.8rem', cursor: 'pointer' }}>★ Destacar este producto (Favorito)</label>
-                </div>
-                <button type="submit" className="btn btn-primary" style={{ padding: '0.75rem' }} disabled={isUploading}>{isUploading ? 'Procesando...' : 'Guardar Producto'}</button>
-            </form>
-          </section>
-
-          <h2>Inventario General</h2>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem', marginTop: '1rem' }}>
-            <div className="glass" style={{ padding: '0', overflow: 'hidden' }}>
-              <div 
-                onClick={() => setOpenCategory(openCategory === 'Niño' ? null : 'Niño')} 
-                className="collapse-header"
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '1rem' }}
-              >
-                <p style={{ color: 'var(--primary)', fontWeight: 'bold', margin: 0 }}>NIÑO ({products.filter(p => p.category === 'Niño').length})</p>
-                <span>{openCategory === 'Niño' ? '▲' : '▼'}</span>
-              </div>
-              {openCategory === 'Niño' && (
-              <div style={{ padding: '0 1rem 1rem 1rem' }}>
-                  <div className="admin-grid">
-                      {products.filter(p => p.category === 'Niño').map(p => (
-                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onClone={handleClone} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
-                      ))}
-                  </div>
-              </div>
-            )}
-            </div>
-            
-            <div className="glass" style={{ padding: '0', overflow: 'hidden', marginTop: '1rem' }}>
-              <div 
-                onClick={() => setOpenCategory(openCategory === 'Adulto' ? null : 'Adulto')} 
-                className="collapse-header"
-                style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer', padding: '1rem' }}
-              >
-                <p style={{ color: 'var(--primary)', fontWeight: 'bold', margin: 0 }}>ADULTO ({products.filter(p => !p.category || p.category === 'Adulto').length})</p>
-                <span>{openCategory === 'Adulto' ? '▲' : '▼'}</span>
-              </div>
-              {openCategory === 'Adulto' && (
-              <div style={{ padding: '0 1rem 1rem 1rem' }}>
-                  <div className="admin-grid">
-                      {products.filter(p => !p.category || p.category === 'Adulto').map(p => (
-                          <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={deleteProduct} onEdit={handleEdit} onClone={handleClone} onHover={setHoveredImage} onUpdate={updateProductAttribute} />
-                      ))}
-                  </div>
-              </div>
-            )}
-            </div>
-          </div>
+      {isTestMode && (
+        <div style={{ background: '#22c55e', color: 'white', padding: '0.5rem', textAlign: 'center', borderRadius: '8px', marginBottom: '1.5rem', fontWeight: 'bold', fontSize: '0.9rem' }}>
+          ⚠️ USANDO DATASET DE PRUEBAS LOCAL. Los cambios no se guardarán en la base de datos de producción.
         </div>
+      )}
 
-        {/* Floating Order Panel */}
-        <div className={`order-toggle`} onClick={() => setIsOrderOpen(!isOrderOpen)}>
-          {isOrderOpen ? 'CERRAR PEDIDO ➔' : '🛒 VER PEDIDO ACTUAL'}
-        </div>
-        <aside className={`floating-order ${isOrderOpen ? '' : 'collapsed'}`}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3>Pedido Actual 🛒</h3>
-            <button onClick={() => setIsOrderOpen(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem' }}>×</button>
-          </div>
-          <div style={{ overflowY: 'auto', height: 'calc(100vh - 250px)', paddingRight: '0.5rem' }}>
-            <div style={{ position: 'relative', marginBottom: '1rem' }}>
-                <input 
-                  type="text" 
-                  placeholder="🔍 Buscar por ID o Nombre..." 
-                  className="glass" 
-                  style={{ width: '100%', padding: '0.8rem', borderRadius: '8px' }}
-                  value={orderSearchTerm}
-                  onChange={e => setOrderSearchTerm(e.target.value)}
-                />
-                {orderSearchTerm && (
-                  <div className="glass" style={{ 
-                    position: 'absolute', top: '100%', left: 0, width: '100%', zIndex: 100, 
-                    maxHeight: '250px', overflowY: 'auto', background: '#1e293b', border: '1px solid var(--primary)'
-                  }}>
-                    {products.filter(p => 
-                      p.name.toLowerCase().includes(orderSearchTerm.toLowerCase()) || 
-                      p.short_id?.includes(orderSearchTerm)
-                    ).map(p => (
-                      <div 
-                        key={p.id} 
-                        onClick={() => { addToOrderList(p); setOrderSearchTerm(''); }}
-                        style={{ padding: '0.5rem', borderBottom: '1px solid #334155', cursor: 'pointer', display: 'flex', gap: '0.5rem', alignItems: 'center' }}
-                        className="search-result-item"
-                      >
-                        <img src={p.image_url} style={{ width: '30px', height: '30px', borderRadius: '4px' }} alt="" />
-                        <div style={{ fontSize: '0.75rem' }}>
-                            <span style={{ color: 'var(--primary)', fontWeight: 'bold' }}>#{p.short_id}</span> - {p.name} <span style={{ opacity: 0.6, fontSize: '0.65rem' }}>({p.category || 'Adulto'})</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-            </div>
+      <div className="tabs">
+        <button className={`tab-btn ${activeTab === 'inventory' ? 'active' : ''}`} onClick={() => setActiveTab('inventory')}>📦 INVENTARIO</button>
+        <button className={`tab-btn ${activeTab === 'customers' ? 'active' : ''}`} onClick={() => setActiveTab('customers')}>👥 CLIENTES</button>
+        <button className={`tab-btn ${activeTab === 'sales' ? 'active' : ''}`} onClick={() => setActiveTab('sales')}>💰 VENTAS</button>
+        <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>📜 HISTORIAL PROV</button>
+        <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>⚙️ CONFIG</button>
+      </div>
 
-            <div className="glass" style={{ padding: '1rem', background: 'rgba(59,130,246,0.1)', marginBottom: '1rem' }}>
-              <input type="text" placeholder="Manual..." className="glass" style={{ padding: '0.3rem', width: '100%', marginBottom: '0.5rem' }} value={manualItem.name} onChange={e => setManualItem({...manualItem, name: e.target.value})} />
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
-                <input type="text" placeholder="Talla" className="glass" style={{ padding: '0.3rem', width: '100%', minWidth: 0 }} value={manualItem.size} onChange={e => setManualItem({...manualItem, size: e.target.value})} />
-                <button onClick={addManualItem} className="btn btn-primary" style={{ padding: '0.3rem' }}>+</button>
-              </div>
-            </div>
-            <div style={{ maxHeight: '400px', overflowY: 'auto' }}>
-              {activeOrderItems.map(item => (
-                <div key={item.orderId} className="glass" style={{ padding: '0.8rem', marginBottom: '0.8rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '0.8rem' }}>
-                        <strong>{item.name}</strong>
-                        <span style={{ display: 'block', fontSize: '0.65rem', opacity: 0.7, marginTop: '2px' }}>Categoría: {item.category}</span>
+      <main>
+        {activeTab === 'inventory' && (
+          <div className="admin-main-grid">
+            <div className="admin-content-area">
+              <section className="glass" style={{ padding: '2rem', marginBottom: '2rem' }}>
+                <h3 style={{ color: 'var(--primary)', marginBottom: '1.5rem' }}>{editingId ? 'Editar Producto' : 'Nuevo Producto'}</h3>
+                <form onSubmit={handleCatalogSubmit} className="admin-form-grid">
+                  <input type="text" placeholder="Nombre al Uniforme" required className="glass" style={{ padding: '1rem', width: '100%' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+                  <div style={{ margin: '1rem 0' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
+                      <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--primary)' }}>Tallas y Existencias:</label>
+                      <button type="button" onClick={() => setNewProduct({...newProduct, size: '', stock_by_size: {}})} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '0.75rem', cursor: 'pointer' }}>Borrar todas</button>
                     </div>
-                    <button onClick={() => setActiveOrderItems(activeOrderItems.filter(i => i.orderId !== item.orderId))} style={{ color: '#ff4444', background: 'none', border: 'none', padding: '0 0.5rem' }}>×</button>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '1rem' }}>
+                      {(availableSizes[newProduct.category] || []).map(size => {
+                        const qty = (newProduct.stock_by_size && newProduct.stock_by_size[size]) || 0;
+                        const isSelected = qty > 0 || (newProduct.size && newProduct.size.split(',').map(s => s.trim()).includes(size));
+                        return (
+                          <div 
+                            key={size} 
+                            className={`glass ${isSelected ? 'active' : ''}`}
+                            style={{ padding: '0.8rem', borderRadius: '12px', border: isSelected ? '1px solid var(--primary)' : '1px solid rgba(255,255,255,0.1)', background: isSelected ? 'rgba(239, 129, 30, 0.05)' : 'none', transition: '0.2s' }}
+                          >
+                            <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                              <span>{size}</span>
+                              {isSelected && <span style={{ color: 'var(--primary)' }}>✓</span>}
+                            </div>
+                            <input 
+                              type="number" 
+                              placeholder="0" 
+                              min="0"
+                              className="glass" 
+                              style={{ width: '100%', padding: '0.4rem', fontSize: '0.8rem', textAlign: 'center' }}
+                              value={(newProduct.stock_by_size && newProduct.stock_by_size[size]) || 0}
+                              onChange={e => {
+                                const val = parseInt(e.target.value) || 0;
+                                const nextStock = { ...(newProduct.stock_by_size || {}), [size]: val };
+                                // Re-calculate size string based on what has stock
+                                const activeSizes = Object.entries(nextStock).filter(([_, v]) => v > 0).map(([k]) => k);
+                                setNewProduct({
+                                  ...newProduct, 
+                                  stock_by_size: nextStock,
+                                  size: activeSizes.join(', ')
+                                });
+                              }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '0.4rem', marginTop: '0.5rem' }}>
-                    <input type="text" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.size} onChange={e => updateOrderItem(item.orderId, { size: e.target.value })} />
-                    <input type="number" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.quantity} onChange={e => updateOrderItem(item.orderId, { quantity: e.target.value })} />
-                    <input type="number" className="glass" style={{ padding: '0.2rem', width: '100%', minWidth: 0 }} value={item.price} onChange={e => updateOrderItem(item.orderId, { price: e.target.value })} />
+                  <div className="admin-form-row">
+                    <select 
+                      className="glass" 
+                      style={{ padding: '1rem', background: 'var(--bg-color)', width: '100%' }} 
+                      value={newProduct.category} 
+                      onChange={e => setNewProduct({...newProduct, category: e.target.value, size: '', stock_by_size: {}})}
+                    >
+                      <option value="Adulto">Adulto</option>
+                      <option value="Niño">Niño</option>
+                    </select>
                   </div>
-                  <input type="text" className="glass" style={{ width: '100%', padding: '0.2rem', marginTop: '0.4rem' }} value={item.comment} onChange={e => updateOrderItem(item.orderId, { comment: e.target.value })} placeholder="Notas..." />
+                  <div className="admin-form-row">
+                    <input type="number" placeholder="Precio ($)" className="glass" style={{ padding: '1rem', width: '100%' }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
+                    <input type="file" className="glass" style={{ padding: '0.8rem', width: '100%' }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
+                  </div>
+                  <button type="submit" className="btn btn-primary" style={{ padding: '1.1rem', width: '100%', fontSize: '1rem' }}>{editingId ? 'Actualizar' : 'Guardar'}</button>
+                </form>
+              </section>
+
+              {['Niño', 'Adulto'].map(cat => (
+                <div key={cat} style={{ marginBottom: '1.5rem' }}>
+                  <div onClick={() => setOpenCategory(openCategory === cat ? null : cat)} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', cursor: 'pointer', marginBottom: '1rem' }}>
+                    <h4 style={{ margin: 0 }}>{cat.toUpperCase()} ({products.filter(p => (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat)).length})</h4>
+                    <span>{openCategory === cat ? '▲' : '▼'}</span>
+                  </div>
+                  {openCategory === cat && (
+                    <div className="admin-grid">
+                      {products.filter(p => (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat)).map(p => (
+                        <AdminItem key={p.id} p={p} onAdd={addToOrderList} onDelete={handleDelete} onEdit={handleEdit} onSell={addToSaleList} onHover={setHoveredImage} />
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
-            <div style={{ borderTop: '1px solid #444', marginTop: '1rem', paddingTop: '1rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold' }}><span>Total:</span><span>${getTotal().toFixed(2)}</span></div>
-              <button className="btn btn-primary" style={{ width: '100%', padding: '1rem', marginTop: '1rem' }} onClick={async () => {
-                if (!activeOrderItems.length || !window.confirm("Finalizar?")) return;
-                const totalVal = getTotal();
-                const totalCostVal = getTotalCost();
-                const totalProfitVal = totalVal - totalCostVal;
 
-                await fetch('/api/orders', { 
-                    method: 'POST', 
-                    headers: { 'Content-Type': 'application/json' }, 
-                    body: JSON.stringify({ 
-                        items: activeOrderItems, 
-                        total_price: totalVal,
-                        total_cost: totalCostVal,
-                        total_profit: totalProfitVal
-                    }) 
-                });
-                setActiveOrderItems([]); localStorage.removeItem('deportux_draft_order'); fetchOrdersHistory(); alert('Pedido Guardado en Historial');
-              }}>FINALIZAR PEDIDO</button>
-            </div>
-          </div>
-        </aside>
-      </div>
-
-      <section style={{ marginTop: '5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '1rem' }}>
-          <h2 style={{ margin: 0, color: 'var(--primary)' }}>Resumen del Trabajo Actual (Proveedor)</h2>
-          <button onClick={downloadSummaryXLSX} className="btn" style={{ background: '#10b981', color: 'white', padding: '0.5rem 1rem', fontSize: '0.8rem' }}>
-            📥 Descargar XLSX (Excel)
-          </button>
-        </div>
-        <div className="glass" style={{ padding: '2rem' }}>
-          {getSummaryForItems(activeOrderItems).map((g, idx) => (
-            <div key={idx} style={{ marginBottom: '1.2rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '1.2rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                <div style={{ fontSize: '1.1rem', flex: 1 }}>
-                  <strong style={{ color: 'var(--primary)' }}>{g.total}x</strong> {g.name} <strong>({g.size || 'Unique'})</strong>
-                </div>
-                <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '8px' }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <label style={{ fontSize: '0.6rem', opacity: 0.7 }}>Costo Unit.</label>
-                        <input 
-                            type="number" 
-                            className="glass" 
-                            style={{ padding: '0.2rem', width: '80px', fontSize: '0.8rem' }} 
-                            value={g.cost} 
-                            onChange={(e) => updateSummaryFinances(g.name, g.size, 'cost', e.target.value)}
-                        />
+            <aside className="admin-sidebar glass" style={{ padding: '1.5rem' }}>
+              <h4 style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '0.5rem', marginBottom: '1rem' }}>📋 Resumen para Proveedor</h4>
+              <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+                {getSummaryForItems(activeOrderItems).map((g, i) => (
+                  <div key={i} style={{ marginBottom: '1rem', fontSize: '0.9rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between' }}><strong>{g.total}x {g.name}</strong> <span>{g.size}</span></div>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.3rem' }}>
+                      <input type="number" className="glass" style={{ width: '100%', padding: '0.2rem' }} value={g.cost} onChange={e => updateSummaryFinances(g.name, g.size, 'cost', e.target.value)} title="Costo" />
+                      <input type="number" className="glass" style={{ width: '100%', padding: '0.2rem' }} value={g.price} onChange={e => updateSummaryFinances(g.name, g.size, 'sale_price', e.target.value)} title="Venta" />
                     </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-                        <label style={{ fontSize: '0.6rem', opacity: 0.7 }}>Venta Unit.</label>
-                        <input 
-                            type="number" 
-                            className="glass" 
-                            style={{ padding: '0.2rem', width: '80px', fontSize: '0.8rem' }} 
-                            value={g.price} 
-                            onChange={(e) => updateSummaryFinances(g.name, g.size, 'price', e.target.value)}
-                        />
-                    </div>
-                </div>
-              </div>
-              <div style={{ marginLeft: '1.5rem', marginTop: '0.5rem' }}>
-                {g.items.map((it, iIdx) => (
-                  <div key={iIdx} style={{ fontSize: '0.9rem', opacity: 0.8, marginBottom: '0.2rem' }}>
-                    - {it.q}x [{g.name} ({g.size})] &raquo; {it.comment || '(Sin notas)'}
                   </div>
                 ))}
+              </div>
+              <button onClick={downloadSummaryXLSX} className="btn" style={{ width: '100%', marginTop: '1rem', background: '#10b981' }}>Excel Proveedor</button>
+            </aside>
+          </div>
+        )}
+
+        {activeTab === 'customers' && (
+          selectedCustomerId ? (
+            <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', background: 'rgba(15, 23, 42, 0.95)', zIndex: 2000, display: 'flex', justifyContent: 'center', alignItems: 'center', backdropFilter: 'blur(10px)' }}>
+              <div className="glass" style={{ width: '95%', maxWidth: '900px', height: '90vh', padding: '2.5rem', overflowY: 'auto', border: '1px solid var(--primary)', position: 'relative', boxShadow: '0 0 50px rgba(0,0,0,0.5)' }}>
+                <button onClick={() => setSelectedCustomerId(null)} style={{ position: 'absolute', top: '1rem', right: '1rem', background: 'none', border: 'none', color: 'white', fontSize: '2rem', cursor: 'pointer' }}>×</button>
+                
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '2.5rem', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '1rem' }}>
+                  <div>
+                    <h2 style={{ margin: 0, color: 'var(--primary)' }}>{customers.find(c => c.id === selectedCustomerId)?.name}</h2>
+                    <p style={{ opacity: 0.6, margin: '5px 0 0 0' }}>📱 {customers.find(c => c.id === selectedCustomerId)?.phone}</p>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>DEUDA TOTAL</div>
+                    <div style={{ fontSize: '2rem', fontWeight: 'bold', color: '#f87171' }}>${parseFloat(customers.find(c => c.id === selectedCustomerId)?.balance || 0).toFixed(2)}</div>
+                  </div>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2rem' }}>
+                  <div>
+                    <h4 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>📦 Apartados Pendientes <span style={{ background: 'var(--primary)', color: 'white', fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px' }}>{reservations.filter(r => r.customer_id === selectedCustomerId && r.status !== 'Delivered').length}</span></h4>
+                    <div style={{ display: 'grid', gap: '1rem' }}>
+                      {reservations.filter(r => r.customer_id === selectedCustomerId && r.status !== 'Delivered').map(r => (
+                        <div key={r.id} className="glass" style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)' }}>
+                          <div style={{ display: 'flex', gap: '1rem', marginBottom: '1rem' }}>
+                            <img src={r.image_url} style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '8px' }} alt="" />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 'bold' }}>{r.product_name}</div>
+                              <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>Talla: {r.product_size} | Cant: {r.quantity}</div>
+                              <div style={{ marginTop: '5px', fontSize: '0.9rem' }}>
+                                Total: <strong>${(r.price_at_reservation * r.quantity).toFixed(0)}</strong> | 
+                                Pagado: <span style={{ color: '#4ade80' }}>${parseFloat(r.paid_amount || 0).toFixed(0)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '8px' }}>
+                            <input type="number" placeholder="Monto" className="glass" style={{ flex: 1, padding: '0.5rem', fontSize: '0.9rem' }} value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} />
+                            <button onClick={() => handleReservationPayment(r, paymentAmount, false)} className="btn btn-primary" style={{ padding: '0.5rem 1rem', fontSize: '0.8rem' }}>Abonar</button>
+                            <button onClick={() => handleReservationPayment(r, (r.price_at_reservation * r.quantity) - (r.paid_amount || 0), true)} className="btn" style={{ padding: '0.5rem 1rem', background: '#10b981', fontSize: '0.8rem' }}>Liquidar</button>
+                          </div>
+                        </div>
+                      ))}
+                      {reservations.filter(r => r.customer_id === selectedCustomerId && r.status !== 'Delivered').length === 0 && (
+                        <p style={{ opacity: 0.5, textAlign: 'center', marginTop: '2rem' }}>No hay apartados pendientes.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div style={{ padding: '1.5rem', background: 'rgba(255,255,255,0.03)', borderRadius: '12px', marginBottom: '2rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                        <span style={{ fontSize: '1.1rem' }}>💰 Saldo Pendiente:</span>
+                        <strong style={{ color: parseFloat(customers.find(c => c.id === selectedCustomerId)?.balance || 0) > 0 ? '#f87171' : '#4ade80', fontSize: '1.8rem' }}>
+                          ${parseFloat(customers.find(c => c.id === selectedCustomerId)?.balance || 0).toFixed(0)}
+                        </strong>
+                      </div>
+                      <div style={{ display: 'flex', gap: '1rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '12px' }}>
+                        <input 
+                          type="number" 
+                          placeholder="Monto de Abono General" 
+                          className="glass" 
+                          style={{ flex: 1, padding: '0.8rem', fontSize: '1rem' }} 
+                          value={generalAbonoAmount} 
+                          onChange={e => setGeneralAbonoAmount(e.target.value)} 
+                        />
+                        <button 
+                          onClick={() => handleGeneralAbono(selectedCustomerId, generalAbonoAmount)} 
+                          className="btn" 
+                          style={{ background: '#10b981', padding: '0 2rem' }}
+                        >
+                          ABONAR A DEUDA
+                        </button>
+                      </div>
+                    </div>
+
+                    <h4 style={{ marginBottom: '1.5rem' }}>💰 Historial de Compras y Pagos</h4>
+                    <div style={{ display: 'grid', gap: '1rem', maxHeight: '50vh', overflowY: 'auto', paddingRight: '0.5rem' }}>
+                      {sales.filter(s => s.customer_id === selectedCustomerId).map(s => {
+                        const items = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]');
+                        const isPaymentOnly = s.total_amount === "0.00" || s.total_amount === 0;
+                        return (
+                          <div key={s.id} style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem', borderBottom: '1px solid rgba(255,255,255,0.05)', paddingBottom: '0.5rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                                <span style={{ opacity: 0.6, fontSize: '0.75rem' }}>{new Date(s.created_at).toLocaleDateString()}</span>
+                                <select 
+                                  className="glass" 
+                                  style={{ background: '#0f172a', padding: '0.2rem 0.5rem', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+                                  value={s.customer_id || ''}
+                                  onChange={(e) => handleReassignSale(s.id, e.target.value)}
+                                >
+                                  {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                              </div>
+                              <span style={{ color: isPaymentOnly ? '#10b981' : (parseFloat(s.total_amount) > parseFloat(s.paid_amount) ? '#f87171' : '#4ade80'), fontWeight: 'bold' }}>
+                                {isPaymentOnly ? `Abono: +$${parseFloat(s.paid_amount).toFixed(0)}` : `Venta: $${parseFloat(s.total_amount).toFixed(0)}`}
+                              </span>
+                            </div>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                              {items.map((it, idx) => (
+                                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem' }}>
+                                  <span>{it.quantity}x {it.name} {it.size ? <small style={{ opacity: 0.6 }}>({it.size})</small> : ''}</span>
+                                  <span style={{ opacity: 0.7 }}>{it.price > 0 ? `$${(parseFloat(it.price) * parseInt(it.quantity)).toFixed(0)}` : ''}</span>
+                                </div>
+                              ))}
+                              {!isPaymentOnly && parseFloat(s.paid_amount) < parseFloat(s.total_amount) && (
+                                <div style={{ marginTop: '0.5rem', padding: '0.4rem', background: 'rgba(248, 113, 113, 0.1)', borderRadius: '6px', fontSize: '0.8rem', color: '#f87171', textAlign: 'right' }}>
+                                  Faltante: -${(parseFloat(s.total_amount) - parseFloat(s.paid_amount)).toFixed(0)}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))', gap: '1.5rem' }}>
+              <div className="glass" style={{ gridColumn: '1 / -1', padding: '1.5rem' }}>
+                <h4>➕ Nuevo Cliente</h4>
+                <form onSubmit={async e => { 
+                  e.preventDefault(); 
+                  await fetch('/api/customers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(newCustomer) }); 
+                  setNewCustomer({name:'', phone:''}); 
+                  fetchCustomers(); 
+                }} style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
+                  <input type="text" placeholder="Nombre" required className="glass" style={{ flex: 2, padding: '0.8rem' }} value={newCustomer.name} onChange={e => setNewCustomer({...newCustomer, name: e.target.value})} />
+                  <input type="text" placeholder="WhatsApp" className="glass" style={{ flex: 1, padding: '0.8rem' }} value={newCustomer.phone} onChange={e => setNewCustomer({...newCustomer, phone: e.target.value})} />
+                  <button type="submit" className="btn btn-primary">Registrar</button>
+                </form>
+              </div>
+              {customers.map(c => (
+                <div key={c.id} className="customer-card">
+                  <h4 style={{ margin: 0 }}>{c.name}</h4>
+                  <p style={{ opacity: 0.6, fontSize: '0.9rem' }}>📱 {c.phone}</p>
+                  <div style={{ marginTop: '1rem', background: 'rgba(0,0,0,0.2)', padding: '0.8rem', borderRadius: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span>Saldo Pendiente:</span>
+                    <strong style={{ color: parseFloat(c.balance || 0) > 0 ? '#f87171' : '#4ade80', fontSize: '1.1rem' }}>${parseFloat(c.balance || 0).toFixed(2)}</strong>
+                  </div>
+                  <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem' }}>
+                    <button onClick={() => setSelectedCustomerId(c.id)} className="btn glass" style={{ flex: 1, fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.1)' }}>VER DETALLES / ABONAR</button>
+                    <button onClick={() => handleDeleteCustomer(c.id)} className="btn glass" style={{ width: '45px', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.2)' }} title="Eliminar Cliente">🗑️</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )
+        )}
+
+        {activeTab === 'sales' && (
+          <div className="glass" style={{ padding: '1.5rem' }}>
+            <h3 style={{ marginBottom: '1.5rem', display: 'flex', alignItems: 'center', gap: '10px' }}>🎯 Historial Global de Ventas</h3>
+            <div style={{ display: 'grid', gap: '1rem' }}>
+              {sales.map(s => {
+                const items = Array.isArray(s.items) ? s.items : JSON.parse(s.items || '[]');
+                return (
+                  <div key={s.id} className="glass" style={{ padding: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                        <select 
+                          className="glass" 
+                          style={{ background: '#0f172a', padding: '0.4rem', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.1)', color: 'white' }}
+                          value={s.customer_id || ''}
+                          onChange={(e) => handleReassignSale(s.id, e.target.value)}
+                        >
+                          <option value="">🛒 Venta Local</option>
+                          {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                        <span style={{ opacity: 0.4, fontSize: '0.7rem' }}>#{s.id} | {new Date(s.created_at).toLocaleDateString()}</span>
+                      </div>
+                      <div style={{ marginTop: '0.5rem', fontSize: '0.85rem', opacity: 0.8 }}>
+                        {items.map((it, i) => <span key={i}>{i > 0 && ', '}{it.quantity}x {it.name} {it.size ? `(${it.size})` : ''}</span>)}
+                      </div>
+                    </div>
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>${parseFloat(s.total_amount).toFixed(0)}</div>
+                      <div style={{ color: '#4ade80', fontSize: '0.75rem' }}>Abonado: ${parseFloat(s.paid_amount).toFixed(0)}</div>
+                      {parseFloat(s.total_amount) > parseFloat(s.paid_amount) && (
+                        <div style={{ color: '#f87171', fontSize: '0.75rem' }}>Deuda: -${(parseFloat(s.total_amount) - parseFloat(s.paid_amount)).toFixed(0)}</div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'history' && (
+          <div style={{ display: 'grid', gap: '1rem' }}>
+            {ordersHistory.map(o => (
+              <div key={o.id} className="glass" style={{ padding: '1.5rem', borderLeft: `5px solid ${o.is_entered ? '#10b981' : '#f59e0b'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontWeight: 'bold', fontSize: '1.1rem' }}>Pedido #{o.id} {o.is_entered && '✅'}</div>
+                    <div style={{ opacity: 0.6, fontSize: '0.85rem' }}>{new Date(o.created_at).toLocaleString()}</div>
+                  </div>
+                  <div style={{ display: 'flex', gap: '1rem' }}>
+                    {!o.is_entered && (
+                      <button 
+                        onClick={() => handleReceiveIntoInventory(o)} 
+                        disabled={!(Array.isArray(o.items) ? o.items : JSON.parse(o.items || '[]')).some(it => it.received)}
+                        className="btn btn-primary" 
+                        style={{ padding: '0.6rem 1rem', fontSize: '0.8rem', opacity: (Array.isArray(o.items) ? o.items : JSON.parse(o.items || '[]')).some(it => it.received) ? 1 : 0.5 }}
+                      >
+                        📦 INGRESAR A INVENTARIO
+                      </button>
+                    )}
+                    <button className="btn glass" onClick={() => setExpandedHistory(expandedHistory === o.id ? null : o.id)}>{expandedHistory === o.id ? 'Ocultar' : 'Detalles'}</button>
+                  </div>
+                </div>
+                {expandedHistory === o.id && (
+                  <div style={{ marginTop: '1rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1rem', fontSize: '0.9rem' }}>
+                    {!o.is_entered && (
+                      <div style={{ marginBottom: '1rem' }}>
+                        <button onClick={() => markAllAsReceived(o)} className="btn glass" style={{ fontSize: '0.75rem', padding: '0.4rem 0.8rem' }}>
+                          ✅ Marcar todo como recibido
+                        </button>
+                      </div>
+                    )}
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '1rem' }}>
+                      {(Array.isArray(o.items) ? o.items : JSON.parse(o.items || '[]')).map((it, idx) => (
+                        <div 
+                          key={idx} 
+                          className={`item-row ${it.received ? 'received' : ''} ${it.received ? 'animate-check' : ''}`}
+                          style={{ 
+                            background: 'rgba(255,255,255,0.02)', 
+                            padding: '0.8rem', 
+                            borderRadius: '8px', 
+                            border: '1px solid rgba(255,255,255,0.1)', 
+                            transition: '0.3s' 
+                          }}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                            <div 
+                              onClick={() => !o.is_entered && toggleOrderItemReceived(o, idx)}
+                              style={{ 
+                                width: '24px', 
+                                height: '24px', 
+                                borderRadius: '6px', 
+                                border: `2px solid ${it.received ? '#10b981' : 'rgba(255,255,255,0.3)'}`,
+                                background: it.received ? '#10b981' : 'transparent',
+                                display: 'flex',
+                                justifyContent: 'center',
+                                alignItems: 'center',
+                                cursor: o.is_entered ? 'default' : 'pointer',
+                                transition: '0.2s'
+                              }}
+                            >
+                              {it.received && <span style={{ color: 'white', fontWeight: 'bold', fontSize: '0.8rem' }}>✓</span>}
+                            </div>
+                            <div style={{ flex: 1, opacity: it.received ? 1 : 0.6 }}>
+                              <div style={{ fontWeight: 'bold', textDecoration: it.received ? 'line-through' : 'none', color: it.received ? '#10b981' : 'white' }}>{it.quantity}x {it.name}</div>
+                              <div style={{ fontSize: '0.75rem' }}>{it.size} | {it.is_apartado ? '✨ Apartado' : 'Stock'}</div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+        {activeTab === 'settings' && (
+          <div className="glass" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)', marginBottom: '2rem' }}>⚙️ Configuración de Tallas</h3>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem' }}>
+              {/* ADULTO */}
+              <section>
+                <h4 style={{ marginBottom: '1rem', color: '#60a5fa' }}>👨 Tallas Adulto</h4>
+                <div className="size-selector-grid" style={{ marginBottom: '1.5rem' }}>
+                  {(availableSizes.Adulto || []).map(size => (
+                    <div key={`a-${size}`} style={{ position: 'relative', display: 'inline-block' }}>
+                      <span className="size-tag active" style={{ paddingRight: '2.5rem' }}>{size}</span>
+                      <button 
+                        onClick={() => setAvailableSizes(prev => ({ ...prev, Adulto: prev.Adulto.filter(s => s !== size) }))}
+                        style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'white', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <form 
+                  onSubmit={e => {
+                    e.preventDefault();
+                    const val = e.target.newSize.value.trim().toUpperCase();
+                    if (val && !availableSizes.Adulto.includes(val)) {
+                      setAvailableSizes(prev => ({ ...prev, Adulto: [...prev.Adulto, val] }));
+                      e.target.newSize.value = '';
+                    }
+                  }}
+                  style={{ display: 'flex', gap: '0.5rem' }}
+                >
+                  <input name="newSize" type="text" placeholder="Ej: XXL" className="glass" style={{ padding: '0.6rem', flex: 1 }} />
+                  <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem' }}>+</button>
+                </form>
+              </section>
+
+              {/* NIÑO */}
+              <section>
+                <h4 style={{ marginBottom: '1rem', color: '#f472b6' }}>🧒 Tallas Niño</h4>
+                <div className="size-selector-grid" style={{ marginBottom: '1.5rem' }}>
+                  {(availableSizes.Niño || []).map(size => (
+                    <div key={`n-${size}`} style={{ position: 'relative', display: 'inline-block' }}>
+                      <span className="size-tag active" style={{ paddingRight: '2.5rem', background: '#f472b6', borderColor: '#f472b6' }}>{size}</span>
+                      <button 
+                        onClick={() => setAvailableSizes(prev => ({ ...prev, Niño: prev.Niño.filter(s => s !== size) }))}
+                        style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'white', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <form 
+                  onSubmit={e => {
+                    e.preventDefault();
+                    const val = e.target.newSize.value.trim().toUpperCase();
+                    if (val && !availableSizes.Niño.includes(val)) {
+                      setAvailableSizes(prev => ({ ...prev, Niño: [...prev.Niño, val] }));
+                      e.target.newSize.value = '';
+                    }
+                  }}
+                  style={{ display: 'flex', gap: '0.5rem' }}
+                >
+                  <input name="newSize" type="text" placeholder="Ej: 10" className="glass" style={{ padding: '0.6rem', flex: 1 }} />
+                  <button type="submit" className="btn btn-primary" style={{ padding: '0.5rem 1rem', background: '#f472b6' }}>+</button>
+                </form>
+              </section>
+
+              <div style={{ padding: '1rem', background: 'rgba(239, 129, 30, 0.1)', border: '1px solid var(--primary)', borderRadius: '12px', fontSize: '0.85rem', marginTop: '2.5rem' }}>
+                <strong>Nota:</strong> Al eliminar una talla de aquí, no se borrará de los productos existentes, pero ya no aparecerá como opción para nuevos productos de esa categoría.
+              </div>
+            </div>
+          </div>
+        )}
+      </main>
+
+      <div className="toggle-btn sale-toggle" onClick={() => setIsSaleOpen(!isSaleOpen)} style={{ background: '#10b981' }}>{isSaleOpen ? 'CERRAR ➔' : '💰 VENTA ACTUAL'}</div>
+      <div className="toggle-btn order-toggle" onClick={() => setIsOrderOpen(!isOrderOpen)} style={{ right: 0 }}>{isOrderOpen ? 'CERRAR ➔' : '🛒 PEDIDO PROV'}</div>
+      
+      {/* BARRA LATERAL: VENTA ACTUAL (IZQUIERDA) */}
+      <aside className={`floating-sale ${isSaleOpen ? '' : 'collapsed'}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <h3>Venta Directa 💰</h3>
+          <button onClick={() => setIsSaleOpen(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '2rem' }}>×</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          {activeSaleItems.map(item => (
+            <div key={item.saleId} className="glass" style={{ padding: '1rem', borderLeft: '4px solid #10b981' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.8rem' }}>
+                <strong style={{ fontSize: '0.9rem' }}>{item.name}</strong>
+                <button onClick={() => setActiveSaleItems(activeSaleItems.filter(i => i.saleId !== item.saleId))} style={{ color: '#ef4444', border: 'none', background: 'none' }}>×</button>
+              </div>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', alignItems: 'center' }}>
+                <div>
+                  <label style={{ fontSize: '0.65rem', opacity: 0.6, display: 'block' }}>Talla:</label>
+                  <select 
+                    className="glass" 
+                    style={{ width: '100%', padding: '0.3rem', background: '#0f172a' }} 
+                    value={item.size} 
+                    onChange={e => updateSaleItem(item.saleId, { size: e.target.value })}
+                  >
+                    <option value="">Talla</option>
+                    {Object.keys(item.stock_by_size).filter(s => item.stock_by_size[s] > 0).map(s => (
+                      <option key={s} value={s}>{s} ({item.stock_by_size[s]})</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.65rem', opacity: 0.6, display: 'block' }}>Cant:</label>
+                  <input 
+                    type="number" 
+                    className="glass" 
+                    style={{ width: '100%', padding: '0.3rem' }} 
+                    value={item.quantity} 
+                    onChange={e => updateSaleItem(item.saleId, { quantity: parseInt(e.target.value) })} 
+                    min="1" 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.65rem', opacity: 0.6, display: 'block' }}>Precio Uni:</label>
+                  <input 
+                    type="number" 
+                    className="glass" 
+                    style={{ width: '100%', padding: '0.3rem' }} 
+                    value={item.price} 
+                    onChange={e => updateSaleItem(item.saleId, { price: parseFloat(e.target.value) })} 
+                    placeholder="Precio" 
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: '0.65rem', opacity: 0.6, display: 'block' }}>Total:</label>
+                  <div style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>${(parseFloat(item.price || 0) * parseInt(item.quantity || 0)).toFixed(0)}</div>
+                </div>
               </div>
             </div>
           ))}
 
-          {/* Totales del Resumen */}
-          <div style={{ marginTop: '2rem', padding: '1.5rem', background: 'rgba(255,255,255,0.05)', borderRadius: '1rem' }}>
-            <div className="resumen-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '1rem' }}>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Subtotal Costos</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#f87171' }}>${getTotalCost().toFixed(2)}</div>
-                </div>
-                <div style={{ textAlign: 'center' }}>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Subtotal Ventas</div>
-                    <div style={{ fontSize: '1.4rem', fontWeight: 'bold', color: '#4ade80' }}>${getTotal().toFixed(2)}</div>
-                </div>
-                <div style={{ textAlign: 'center', background: 'rgba(59,130,246,0.1)', padding: '1rem', borderRadius: '0.5rem' }}>
-                    <div style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 'bold' }}>GANANCIA TOTAL</div>
-                    <div style={{ fontSize: '1.8rem', fontWeight: 'extrabold', color: 'white' }}>
-                        ${(getTotal() - getTotalCost()).toFixed(2)}
-                    </div>
-                </div>
+          {activeSaleItems.length === 0 && (
+            <div style={{ textAlign: 'center', opacity: 0.4, marginTop: '4rem' }}>
+              <div style={{ fontSize: '3rem', marginBottom: '1rem' }}>🛒</div>
+              <p>Tu carrito de venta está vacío.</p>
             </div>
-          </div>
-        </div>
-      </section>
-
-      {hoveredImage && (
-        <div style={{
-          position: 'fixed',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          zIndex: 9999,
-          pointerEvents: 'none',
-          backgroundColor: 'rgba(0,0,0,0.8)',
-          padding: '1rem',
-          borderRadius: '1rem',
-          boxShadow: '0 0 50px rgba(0,0,0,0.5)',
-          animation: 'fadeIn 0.2s ease-out'
-        }}>
-          <img src={hoveredImage} style={{ maxWidth: '400px', maxHeight: '400px', borderRadius: '0.5rem', display: 'block', border: '2px solid white' }} alt="" />
-        </div>
-      )}
-      <section style={{ marginTop: '5rem', marginBottom: '5rem' }}>
-        <h2 style={{ color: 'var(--primary)', marginBottom: '1.5rem' }}>📜 Historial de Pedidos Finalizados</h2>
-        <div style={{ display: 'grid', gap: '1rem' }}>
-          {ordersHistory.length === 0 ? (
-            <div className="glass" style={{ padding: '2rem', textAlign: 'center', opacity: 0.6 }}>No hay pedidos en el historial.</div>
-          ) : (
-            ordersHistory.map(order => (
-              <div key={order.id} className="glass" style={{ border: '1px solid var(--glass-border)', overflow: 'hidden' }}>
-                <div style={{ padding: '1.2rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-                  <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-                    <div style={{ fontSize: '0.8rem', opacity: 0.7 }}>Pedido #{order.id}</div>
-                    <div style={{ fontSize: '0.85rem' }}>{new Date(order.created_at).toLocaleString('es-MX', { dateStyle: 'medium', timeStyle: 'short' })}</div>
-                  </div>
-                  <div style={{ display: 'flex', gap: '2rem', flexWrap: 'wrap', alignItems: 'center' }}>
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', display: 'block', opacity: 0.7 }}>VENTA</span>
-                      <span style={{ fontWeight: 'bold' }}>${parseFloat(order.total_price).toFixed(2)}</span>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', display: 'block', opacity: 0.7 }}>COSTO</span>
-                      <span style={{ color: '#f87171' }}>${parseFloat(order.total_cost || 0).toFixed(2)}</span>
-                    </div>
-                    <div style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.6rem', display: 'block', opacity: 0.7 }}>GANANCIA</span>
-                      <span style={{ color: '#4ade80', fontWeight: 'bold' }}>${parseFloat(order.total_profit || 0).toFixed(2)}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: '0.5rem' }}>
-                      <button 
-                        onClick={() => setExpandedHistory(expandedHistory === order.id ? null : order.id)}
-                        className="btn glass" 
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', border: '1px solid var(--primary)' }}
-                      >
-                        {expandedHistory === order.id ? 'Ocultar' : 'Detalles'}
-                      </button>
-                      <button 
-                        onClick={() => deleteOrderHistory(order.id)}
-                        className="btn" 
-                        style={{ padding: '0.4rem 0.8rem', fontSize: '0.75rem', background: 'rgba(244,63,94,0.1)', color: '#f43f5e' }}
-                        disabled={deletingId === order.id}
-                      >
-                        {deletingId === order.id ? '...' : 'Eliminar'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                {expandedHistory === order.id && (
-                  <div style={{ padding: '0 1.2rem 1.5rem 1.2rem', borderTop: '1px solid rgba(255,255,255,0.05)', background: 'rgba(0,0,0,0.1)' }}>
-                    <div className="table-responsive">
-                      <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', marginTop: '1rem', fontSize: '0.85rem' }}>
-                        <thead>
-                          <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)', textAlign: 'left', opacity: 0.7 }}>
-                            <th style={{ padding: '0.5rem' }}>Articulo</th>
-                            <th style={{ padding: '0.5rem' }}>Talla</th>
-                            <th style={{ padding: '0.5rem' }}>Cant.</th>
-                            <th style={{ padding: '0.5rem' }}>Venta</th>
-                            <th style={{ padding: '0.5rem' }}>Costo</th>
-                            <th style={{ padding: '0.5rem' }}>Estado / Notas</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {Array.isArray(order.items) && order.items.map((it, idx) => (
-                            <tr key={idx} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)', verticalAlign: 'middle' }}>
-                              <td style={{ padding: '0.5rem' }}>
-                                {it.name}
-                                {it.comment && <div style={{ fontSize: '0.7rem', opacity: 0.6 }}>Cli: {it.comment}</div>}
-                              </td>
-                              <td style={{ padding: '0.5rem' }}>{it.size}</td>
-                              <td style={{ padding: '0.5rem' }}>{it.quantity}</td>
-                              <td style={{ padding: '0.5rem' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.2rem' }}>
-                                  <span>$</span>
-                                  <input 
-                                    type="number"
-                                    className="glass"
-                                    style={{ width: '70px', padding: '0.2rem', fontSize: '0.85rem' }}
-                                    defaultValue={parseFloat(it.price).toFixed(2)}
-                                    onBlur={(e) => updateOrderHistoryItem(order.id, idx, 'price', e.target.value)}
-                                  />
-                                </div>
-                              </td>
-                              <td style={{ padding: '0.5rem' }}>${parseFloat(it.cost || 0).toFixed(2)}</td>
-                              <td style={{ padding: '0.5rem', display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                                <button 
-                                  onClick={() => updateOrderHistoryItem(order.id, idx, 'sold', !it.sold)}
-                                  className="btn"
-                                  style={{ 
-                                    padding: '0.2rem 0.5rem', fontSize: '0.65rem', minWidth: '70px',
-                                    background: it.sold ? 'rgba(74, 222, 128, 0.2)' : 'rgba(239, 129, 30, 0.2)',
-                                    color: it.sold ? '#4ade80' : '#ef811e',
-                                    border: `1px solid ${it.sold ? '#4ade80' : '#ef811e'}`
-                                  }}
-                                >
-                                  {it.sold ? '✓ VENDIDO' : 'PENDIENTE'}
-                                </button>
-                                <textarea 
-                                  placeholder="Nota admin..."
-                                  className="glass"
-                                  style={{ 
-                                    padding: '0.3rem 0.5rem', fontSize: '0.75rem', width: '180px', 
-                                    height: '45px', resize: 'vertical', display: 'block'
-                                  }}
-                                  defaultValue={it.admin_note || ''}
-                                  onBlur={(e) => updateOrderHistoryItem(order.id, idx, 'admin_note', e.target.value)}
-                                />
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            ))
           )}
         </div>
-      </section>
+
+        <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+          <div>
+            <label style={{ fontSize: '0.8rem', opacity: 0.6, display: 'block', marginBottom: '0.5rem' }}>Cliente (Opcional):</label>
+            <select className="glass" style={{ width: '100%', padding: '0.8rem', background: '#0f172a' }} value={saleCustomerId} onChange={e => setSaleCustomerId(e.target.value)}>
+              <option value="">🛒 Público General / Local</option>
+              {customers.map(c => <option key={c.id} value={c.id}>{c.name} ({c.phone})</option>)}
+            </select>
+          </div>
+
+          <div>
+            <label style={{ fontSize: '0.8rem', opacity: 0.6, display: 'block', marginBottom: '0.5rem' }}>Efectivo Recibido:</label>
+            <input 
+              type="number" 
+              className="glass" 
+              style={{ width: '100%', padding: '0.8rem', fontSize: '1.2rem', fontWeight: 'bold', color: '#10b981' }} 
+              value={salePaidAmount} 
+              onChange={e => setSalePaidAmount(e.target.value)} 
+              placeholder={activeSaleItems.reduce((acc, i) => acc + (parseFloat(i.price || 0) * parseInt(i.quantity || 0)), 0).toFixed(0)} 
+            />
+            {(() => {
+              const total = activeSaleItems.reduce((acc, i) => acc + (parseFloat(i.price || 0) * parseInt(i.quantity || 0)), 0);
+              const paid = parseFloat(salePaidAmount || 0);
+              const pgCustomer = customers.find(c => c.name.toLowerCase().includes('público en general') || c.name.toLowerCase().includes('público general'));
+              const isPublic = !saleCustomerId || (pgCustomer && String(saleCustomerId) === String(pgCustomer.id));
+
+              if (isPublic && paid < total && salePaidAmount !== '') {
+                return <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '5px' }}>⚠️ Público General debe pagar el total (${total.toFixed(0)}).</div>;
+              }
+              if (!isPublic && paid < total) {
+                return <div style={{ fontSize: '0.75rem', color: '#f87171', marginTop: '5px' }}>* El resto (${(total - paid).toFixed(0)}) se cargará al saldo del cliente.</div>;
+              }
+              return null;
+            })()}
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.4rem', fontWeight: 'bold', margin: '0.5rem 0' }}>
+            <span>TOTAL:</span>
+            <span style={{ color: 'var(--primary)' }}>${activeSaleItems.reduce((acc, i) => acc + (parseFloat(i.price || 0) * parseInt(i.quantity || 0)), 0).toFixed(0)}</span>
+          </div>
+
+          <button className="btn btn-primary" style={{ width: '100%', padding: '1.2rem', background: '#10b981' }} onClick={handleFinalizeSale} disabled={isUploading || activeSaleItems.length === 0}>
+            {isUploading ? 'Procesando...' : '💰 CONFIRMAR VENTA'}
+          </button>
+        </div>
+      </aside>
+      
+      <aside className={`floating-order ${isOrderOpen ? '' : 'collapsed'}`}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
+          <h3>Pedido a Proveedor 🛒</h3>
+          <button onClick={() => setIsOrderOpen(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '2rem' }}>×</button>
+        </div>
+
+        <div style={{ flex: 1, overflowY: 'auto' }}>
+          {activeOrderItems.map(item => (
+            <div key={item.orderId} className="glass" style={{ padding: '1rem', marginBottom: '1rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                <strong style={{ fontSize: '0.9rem' }}>{item.name}</strong>
+                <button onClick={() => setActiveOrderItems(activeOrderItems.filter(i => i.orderId !== item.orderId))} style={{ color: '#ef4444', border: 'none', background: 'none' }}>×</button>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr', gap: '0.5rem' }}>
+                <input type="number" className="glass" style={{ padding: '0.3rem' }} value={item.quantity} onChange={e => updateOrderItem(item.orderId, { quantity: parseInt(e.target.value) })} />
+                <select className="glass" style={{ padding: '0.3rem', background: '#0f172a', color: 'white' }} value={item.size} onChange={e => updateOrderItem(item.orderId, { size: e.target.value })}>
+                  <option value="">Talla</option>
+                  {(availableSizes[item.category] || []).map(s => <option key={`${item.category}-${s}`} value={s}>{s}</option>)}
+                  {item.size && !availableSizes[item.category]?.includes(item.size) && !item.size.includes(',') && (
+                    <option value={item.size}>{item.size}</option>
+                  )}
+                </select>
+                <input type="number" className="glass" style={{ padding: '0.3rem' }} value={item.sale_price} onChange={e => updateOrderItem(item.orderId, { sale_price: parseFloat(e.target.value) })} placeholder="Venta" />
+              </div>
+              <div style={{ marginTop: '0.8rem', background: 'rgba(0,0,0,0.2)', padding: '0.5rem', borderRadius: '8px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem' }}>
+                  <input type="checkbox" checked={item.is_apartado} onChange={e => updateOrderItem(item.orderId, { is_apartado: e.target.checked })} /> ✨ Es Apartado
+                </label>
+                {item.is_apartado && (
+                  <select className="glass" style={{ width: '100%', marginTop: '0.5rem', padding: '0.3rem', fontSize: '0.8rem', background: '#0f172a' }} value={item.customer_id || ''} onChange={e => updateOrderItem(item.orderId, { customer_id: e.target.value })}>
+                    <option value="">Seleccionar Cliente</option>
+                    {customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ marginTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '1.2rem', fontWeight: 'bold', marginBottom: '1rem' }}>
+            <span>Total Sugerido:</span>
+            <span>${activeOrderItems.reduce((acc, i) => acc + (i.sale_price * i.quantity), 0).toFixed(0)}</span>
+          </div>
+          <button className="btn btn-primary" style={{ width: '100%', padding: '1.2rem' }} onClick={handleFinalizeOrder} disabled={isUploading}>
+            {isUploading ? 'Finalizando...' : 'FINALIZAR E INGRESAR 🚀'}
+          </button>
+        </div>
+      </aside>
+
+      {hoveredImage && (
+        <div style={{ position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 9999, background: 'rgba(0,0,0,0.9)', padding: '1rem', borderRadius: '12px', border: '2px solid var(--primary)', pointerEvents: 'none' }}>
+          <img src={hoveredImage} style={{ maxWidth: '400px', maxHeight: '400px', borderRadius: '8px' }} alt="" />
+        </div>
+      )}
     </div>
   );
 };
 
-const AdminItem = ({ p, onAdd, onDelete, onEdit, onClone, onHover, onUpdate }) => (
-  <div className="glass" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem', marginBottom: '0', position: 'relative', height: '100%' }}>
-    <div style={{ position: 'absolute', top: '0', left: '0', background: p.type === 'order' ? '#f59e0b' : '#10b981', color: 'white', fontSize: '0.55rem', padding: '3px 6px', borderRadius: '4px 0 8px 0', zIndex: 1, fontWeight: 'bold' }}>
-        {p.type === 'order' ? 'BAJO PEDIDO' : 'STOCK'}
+const AdminItem = ({ p, onAdd, onDelete, onEdit, onSell, onHover }) => (
+  <div className="glass" style={{ padding: '0.8rem', display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
+    <div style={{ aspectRatio: '1/1', overflow: 'hidden', borderRadius: '8px', position: 'relative' }}>
+      <img src={p.image_url} style={{ width: '100%', height: '100%', objectFit: 'cover' }} alt="" onMouseEnter={() => onHover(p.image_url)} onMouseLeave={() => onHover(null)} />
+      <div style={{ position: 'absolute', top: 5, left: 5, padding: '2px 8px', borderRadius: '4px', background: p.stock_quantity > 0 ? '#10b981' : '#f59e0b', color: 'white', fontSize: '0.6rem', fontWeight: 'bold' }}>{p.stock_quantity > 0 ? `STK: ${p.stock_quantity}` : 'PEDIDO'}</div>
     </div>
-    {p.type === 'stock' && (
-        <div style={{ position: 'absolute', top: '1.5rem', left: '0', background: 'rgba(0,0,0,0.7)', color: 'white', fontSize: '0.65rem', padding: '3px 8px', borderRadius: '0 4px 4px 0', zIndex: 1, border: '1px solid var(--primary)', borderLeft: 'none' }}>
-            {p.stock_quantity || 0} pzs
-        </div>
-    )}
-    <div style={{ position: 'absolute', top: '0.5rem', right: '0.5rem', zIndex: 1 }}>
-        {p.is_favorite && <span style={{ color: '#fbbf24', fontSize: '1.2rem', textShadow: '0 0 10px rgba(0,0,0,0.5)' }}>★</span>}
+    <div style={{ flex: 1 }}>
+      <div style={{ fontSize: '0.7rem', color: 'var(--primary)', fontWeight: 'bold' }}>#{p.short_id}</div>
+      <div style={{ fontSize: '0.8rem', fontWeight: 'bold' }}>{p.name}</div>
+      <div style={{ fontSize: '0.75rem', opacity: 0.7 }}>{p.size} | ${parseFloat(p.price).toFixed(2)}</div>
     </div>
-    <div style={{ position: 'relative', width: '100%', aspectRatio: '1/1', overflow: 'hidden', borderRadius: '8px' }}>
-        <img 
-          src={p.image_url} 
-          style={{ width: '100%', height: '100%', objectFit: 'cover', cursor: 'zoom-in' }} 
-          alt="" 
-          onMouseEnter={() => onHover(p.image_url)}
-          onMouseLeave={() => onHover(null)}
-        />
-        <div style={{ position: 'absolute', bottom: '0', left: '0', background: 'rgba(0,0,0,0.6)', color: 'white', fontSize: '0.5rem', padding: '2px 5px', borderRadius: '0 4px 0 0', zIndex: 1 }}>
-            {p.category?.toUpperCase() || 'ADULTO'}
-        </div>
-    </div>
-    <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '0.4rem', marginBottom: '0.5rem' }}>
-        <span style={{ color: 'var(--primary)', fontSize: '0.8rem', fontWeight: 'bold' }}>#{p.short_id}</span>
-        <textarea 
-          defaultValue={p.name}
-          onBlur={(e) => {
-            if (e.target.value !== p.name) onUpdate(p.id, 'name', e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.target.blur();
-          }}
-          style={{ 
-            background: 'none', border: 'none', color: 'white', width: '100%', 
-            fontSize: '0.85rem', fontWeight: 'bold', outline: 'none', padding: '0',
-            resize: 'none', height: '2.5rem', lineHeight: '1.2'
-          }}
-          className="inline-edit"
-          title="Clic para editar nombre"
-        />
-      </div>
-      <div style={{ display: 'flex', gap: '0.4rem', marginTop: 'auto', flexWrap: 'wrap' }}>
-        <button onClick={() => onAdd(p)} className="btn btn-primary" style={{ flex: '1 0 100%', padding: '0.4rem', fontSize: '0.8rem', fontWeight: 'bold' }}>AGREGAR +</button>
-        <button onClick={() => onClone(p)} title="Clonar Producto" className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem', background: 'rgba(59,130,246,0.1)', color: 'var(--primary)', border: '1px solid var(--primary)' }}>CLON</button>
-        <button onClick={() => onEdit(p)} className="btn" style={{ flex: 1, padding: '0.4rem', fontSize: '0.7rem', background: 'rgba(255,255,255,0.1)' }}>EDIT</button>
-        <button onClick={() => onDelete(p.id)} style={{ flex: 0, color: '#ff4444', background: 'rgba(255,0,0,0.1)', border: 'none', cursor: 'pointer', borderRadius: '4px', padding: '0 0.6rem' }}>×</button>
-      </div>
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.4rem' }}>
+      <button onClick={() => onAdd(p)} title="Agregar a pedido a proveedor" className="btn btn-primary" style={{ padding: '0.5rem' }}>ORDEN +</button>
+      <button onClick={() => onSell(p)} title="Realizar venta inmediata" className="btn" style={{ padding: '0.5rem', background: '#10b981', color: 'white' }}>VENDER</button>
+      <button onClick={() => onEdit(p)} className="btn glass" style={{ fontSize: '0.7rem' }}>EDITAR</button>
+      <button onClick={() => onDelete(p.id)} className="btn glass" style={{ fontSize: '0.7rem', color: '#ff4444' }}>BORRAR</button>
     </div>
   </div>
 );

@@ -23,14 +23,29 @@ const Catalog = () => {
     try {
       const response = await fetch('/api/products');
       const data = await response.json();
-      setProducts(data);
+      
+      // Agrupar por nombre + categoría para evitar duplicados en el catálogo
+      const grouped = data.reduce((acc, p) => {
+        const key = `${p.name.toLowerCase()}-${(p.category || 'Adulto').toLowerCase()}`;
+        if (!acc[key]) {
+          acc[key] = { ...p };
+        } else {
+          // Fusionar tallas y stock
+          acc[key].stock_by_size = { ...(acc[key].stock_by_size || {}), ...(p.stock_by_size || {}) };
+          acc[key].stock_quantity = (acc[key].stock_quantity || 0) + (p.stock_quantity || 0);
+          // Mantener la lista de tallas actualizada
+          const allSizes = Object.keys(acc[key].stock_by_size).filter(k => acc[key].stock_by_size[k] > 0);
+          acc[key].size = allSizes.join(', ');
+        }
+        return acc;
+      }, {});
+
+      setProducts(Object.values(grouped));
     } catch (error) {
       console.error("Error products:", error);
     } finally {
-      // Garantizar que la animación se vea al menos 800ms
       const elapsedTime = Date.now() - startTime;
       const remainingTime = Math.max(0, 800 - elapsedTime);
-      
       setTimeout(() => {
         setLoading(false);
       }, remainingTime);
@@ -51,21 +66,24 @@ const Catalog = () => {
     return a.name.localeCompare(b.name);
   });
 
-  const addToCart = (product) => {
+  const addToCart = (product, selectedSize) => {
+    if (!selectedSize && product.size && product.size !== 'N/A') return alert("Por favor selecciona una talla");
+
     setCart(prev => {
-      const existing = prev.find(item => item.id === product.id);
+      const cartId = `${product.id}-${selectedSize || 'NA'}`;
+      const existing = prev.find(item => item.cartId === cartId);
       if (existing) {
-        return prev.map(item => item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item);
+        return prev.map(item => item.cartId === cartId ? { ...item, quantity: item.quantity + 1 } : item);
       }
-      return [...prev, { ...product, quantity: 1 }];
+      return [...prev, { ...product, cartId, selectedSize, quantity: 1 }];
     });
     setIsCartVisible(true);
   };
 
-  const removeFromCart = (id) => setCart(prev => prev.filter(item => item.id !== id));
-  const updateQuantity = (id, delta) => {
+  const removeFromCart = (cartId) => setCart(prev => prev.filter(item => item.cartId !== cartId));
+  const updateQuantity = (cartId, delta) => {
     setCart(prev => prev.map(item => {
-      if (item.id === id) {
+      if (item.cartId === cartId) {
         const newQ = Math.max(1, item.quantity + delta);
         return { ...item, quantity: newQ };
       }
@@ -80,7 +98,8 @@ const Catalog = () => {
     
     cart.forEach(item => {
       const priceText = item.type === 'order' ? 'Cotizar' : `$${item.price}`;
-      message += `• ${item.quantity}x [#${item.short_id}] ${item.name} (${item.size || 'N/A'}) - ${priceText}\n`;
+      const sizeText = item.selectedSize ? ` Talla: ${item.selectedSize}` : '';
+      message += `• ${item.quantity}x [#${item.short_id}] ${item.name}${sizeText} - ${priceText}\n`;
       if (item.type !== 'order') total += item.price * item.quantity;
     });
 
@@ -186,7 +205,7 @@ const Catalog = () => {
                     key={product.id} 
                     product={product} 
                     onOpenImage={setSelectedImage} 
-                    onAddToCart={() => addToCart(product)}
+                    onAddToCart={(size) => addToCart(product, size)}
                   />
                 ))}
                 {filteredProducts.length === 0 && <p style={{ textAlign: 'center', width: '100%', opacity: 0.5 }}>Próximamente más modelos...</p>}
@@ -208,24 +227,23 @@ const Catalog = () => {
               display: 'flex', flexDirection: 'column', gap: '1rem',
               boxShadow: '0 20px 50px rgba(0,0,0,0.5)', overflowY: 'auto'
             }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <h3 style={{ margin: 0 }}>Tu Pedido</h3>
-                <button onClick={() => setIsCartVisible(false)} style={{ background: 'none', border: 'none', color: 'white', fontSize: '1.5rem' }}>×</button>
-              </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
                 {cart.map(item => (
-                  <div key={item.id} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  <div key={item.cartId} style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
                     <img src={item.image_url} alt="" style={{ width: '40px', height: '40px', borderRadius: '8px', objectFit: 'cover' }} />
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: '0.85rem', fontWeight: 'bold', margin:0 }}>{item.name}</p>
-                      <span style={{ fontSize: '0.75rem', opacity: 0.6 }}>{item.type === 'order' ? 'Cotizar' : `$${item.price}`}</span>
+                      <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>
+                        {item.selectedSize && `Talla: ${item.selectedSize} | `}
+                        {item.type === 'order' ? 'Cotizar' : `$${item.price}`}
+                      </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                      <button onClick={() => updateQuantity(item.id, -1)} className="glass" style={{ width: '24px', height: '24px', borderRadius: '50%', color: 'white' }}>-</button>
+                      <button onClick={() => updateQuantity(item.cartId, -1)} className="glass" style={{ width: '24px', height: '24px', borderRadius: '50%', color: 'white' }}>-</button>
                       <span style={{ fontSize: '0.85rem' }}>{item.quantity}</span>
-                      <button onClick={() => updateQuantity(item.id, 1)} className="glass" style={{ width: '24px', height: '24px', borderRadius: '50%', color: 'white' }}>+</button>
+                      <button onClick={() => updateQuantity(item.cartId, 1)} className="glass" style={{ width: '24px', height: '24px', borderRadius: '50%', color: 'white' }}>+</button>
                     </div>
-                    <button onClick={() => removeFromCart(item.id)} style={{ color: '#ff4444', background: 'none', border: 'none' }}>×</button>
+                    <button onClick={() => removeFromCart(item.cartId)} style={{ color: '#ff4444', background: 'none', border: 'none' }}>×</button>
                   </div>
                 ))}
               </div>
@@ -300,9 +318,13 @@ const CategoryCard = ({ title, desc, img, onClick }) => (
 );
 
 const ProductCard = ({ product, onOpenImage, onAddToCart }) => {
+  const [selectedSize, setSelectedSize] = useState('');
   const isOrder = product.type === 'order';
   const isOutOfStock = !isOrder && (product.stock_quantity !== undefined && product.stock_quantity <= 0);
   
+  const sizes = (product.size || '').split(',').map(s => s.trim()).filter(s => s && s !== 'N/A');
+  const needsSize = sizes.length > 0;
+
   return (
     <div className={`glass card ${isOutOfStock ? 'out-of-stock' : ''}`} style={{ opacity: isOutOfStock ? 0.7 : 1 }}>
       <div style={{ position: 'relative', cursor: 'zoom-in' }} onClick={() => onOpenImage(product.image_url)}>
@@ -311,14 +333,6 @@ const ProductCard = ({ product, onOpenImage, onAddToCart }) => {
           position: 'absolute', top: '1rem', left: '1rem', background: isOrder ? '#fbbf24' : (isOutOfStock ? '#ef4444' : '#10b981'),
           color: isOrder ? 'black' : 'white', fontWeight: 'bold', fontSize: '0.65rem'
         }}>{isOrder ? 'BAJO PEDIDO' : (isOutOfStock ? 'AGOTADO' : 'EN EXISTENCIA')}</span>
-        {!isOrder && (
-          <span className="badge" style={{ 
-            position: 'absolute', top: '1rem', right: '1rem', background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(5px)', color: 'white', fontSize: '0.65rem'
-          }}>
-            Talla: {product.size} {product.type === 'stock' && `(${product.stock_quantity || 0} pzs)`}
-          </span>
-        )}
         <span className="badge" style={{ 
           position: 'absolute', bottom: '1rem', left: '1rem', background: 'rgba(255,255,255,0.15)',
           backdropFilter: 'blur(8px)', color: 'white', fontSize: '0.6rem', padding: '0.2rem 0.6rem',
@@ -330,11 +344,42 @@ const ProductCard = ({ product, onOpenImage, onAddToCart }) => {
           <h3 style={{ margin: 0, fontSize: '1.25rem' }}>{product.name}</h3>
           <span style={{ color: 'var(--primary)', fontWeight: 'bold', fontSize: '0.82rem', opacity: 0.9 }}>#{product.short_id}</span>
         </div>
+
+        {needsSize && (
+          <div style={{ margin: '0.8rem 0' }}>
+            <div style={{ fontSize: '0.65rem', opacity: 0.6, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona Talla:</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+              {sizes.map(s => {
+                const stock = product.stock_by_size ? product.stock_by_size[s] : 0;
+                const isSizeOut = !isOrder && (stock === 0 || stock === undefined);
+                return (
+                  <button 
+                    key={s} 
+                    disabled={isSizeOut}
+                    onClick={() => setSelectedSize(s)}
+                    className={`size-tag ${selectedSize === s ? 'active' : ''} ${isSizeOut ? 'disabled' : ''}`}
+                    style={{ padding: '0.3rem 0.6rem', fontSize: '0.7rem', minWidth: '35px', position: 'relative' }}
+                    title={isOrder ? 'Bajo Pedido' : (isSizeOut ? 'Agotado' : `${stock} disponibles`)}
+                  >
+                    {s}
+                    {isSizeOut && !isOrder && <div style={{ position: 'absolute', top: '-5px', right: '-5px', fontSize: '8px' }}>🚫</div>}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 'auto' }}>
           <span className="price" style={{ color: isOrder ? '#fbbf24' : 'inherit' }}>
             {isOrder ? 'Cotizar' : `$${product.price}`}
           </span>
-          <button onClick={onAddToCart} className="btn btn-primary" style={{ padding: '0.5rem 1rem' }} disabled={isOutOfStock}>
+          <button 
+            onClick={() => onAddToCart(selectedSize)} 
+            className="btn btn-primary" 
+            style={{ padding: '0.5rem 1rem' }} 
+            disabled={isOutOfStock || (needsSize && !selectedSize)}
+          >
             {isOrder ? 'Consultar' : (isOutOfStock ? 'Agotado' : 'Añadir 🛒')}
           </button>
         </div>

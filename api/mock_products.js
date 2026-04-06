@@ -1,4 +1,4 @@
-[
+export const mockProducts = [
   {
     "id": 1001,
     "name": "Bayer Munich Home 24/25",
@@ -65,4 +65,4 @@
     "is_favorite": false,
     "short_id": "0006"
   }
-]
+];
