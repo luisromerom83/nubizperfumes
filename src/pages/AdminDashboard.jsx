@@ -458,6 +458,13 @@ const AdminDashboard = () => {
       // Si el campo de pago está vacío, ahora es Cero (Deuda Full)
       const finalPaidAmount = salePaidAmount === '' ? 0 : parseFloat(salePaidAmount);
 
+      if (finalPaidAmount < totalAmount) {
+        if (!window.confirm(`⚠️ Esta venta generará una DEUDA de $${(totalAmount - finalPaidAmount).toFixed(0)} para el cliente. ¿Confirmar?`)) {
+          setIsUploading(false);
+          return;
+        }
+      }
+
       await fetch('/api/sales', {
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' },
