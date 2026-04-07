@@ -146,7 +146,7 @@ const Catalog = () => {
           </a>
         </div>
         <h1 style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', marginBottom: '0.5rem', lineHeight: '1.1' }}>
-          Tu Estilo, <br/> Bajo Tus Reglas
+          Tu Esencia Personal, <br/> En Cada Fragancia
         </h1>
       </section>
 
