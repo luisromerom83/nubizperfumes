@@ -1,13 +1,13 @@
 :root {
-  --primary: #ef811e; /* Naranja del logo */
-  --primary-hover: #d66f10;
-  --bg-color: #062746; /* Registro exacto solicitado */
-  --bg-gradient: linear-gradient(135deg, #062746 0%, #041a2f 100%);
-  --glass-bg: rgba(255, 255, 255, 0.03);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --primary: #cfa861; /* Vibrant Gold */
+  --primary-hover: #b59253;
+  --bg-color: #050505; /* Deep Black */
+  --bg-gradient: linear-gradient(135deg, #0f0f0f 0%, #000000 100%);
+  --glass-bg: rgba(255, 255, 255, 0.02);
+  --glass-border: rgba(255, 255, 255, 0.08);
   --text-main: #ffffff;
-  --text-muted: #cbd5e1;
-  --accent: #ef811e;
+  --text-muted: #9ca3af;
+  --accent: #cfa861;
   --radius-lg: 1rem;
   --radius-md: 0.75rem;
   --font-family: 'Outfit', sans-serif;

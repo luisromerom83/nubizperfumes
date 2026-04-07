@@ -27,14 +27,14 @@ const Catalog = () => {
       
       // Agrupar por nombre + categoría para evitar duplicados en el catálogo
       const grouped = data.reduce((acc, p) => {
-        const key = `${p.name.toLowerCase()}-${(p.category || 'Adulto').toLowerCase()}`;
+        const key = `${p.name.toLowerCase()}-${(p.category || 'Dama').toLowerCase()}`;
         if (!acc[key]) {
           acc[key] = { ...p };
         } else {
-          // Fusionar tallas y stock
+          // Fusionar volumens y stock
           acc[key].stock_by_size = { ...(acc[key].stock_by_size || {}), ...(p.stock_by_size || {}) };
           acc[key].stock_quantity = (acc[key].stock_quantity || 0) + (p.stock_quantity || 0);
-          // Mantener la lista de tallas actualizada
+          // Mantener la lista de volumens actualizada
           const allSizes = Object.keys(acc[key].stock_by_size).filter(k => acc[key].stock_by_size[k] > 0);
           acc[key].size = allSizes.join(', ');
         }
@@ -54,8 +54,8 @@ const Catalog = () => {
   };
 
   const filteredProducts = products.filter(p => {
-    const matchesCategory = (currentCategory === 'Adulto' && (p.category === 'Adulto' || !p.category)) || 
-                            (currentCategory === 'Niño' && p.category === 'Niño');
+    const matchesCategory = (currentCategory === 'Dama' && (p.category === 'Dama' || !p.category)) || 
+                            (currentCategory === 'Caballero' && p.category === 'Caballero');
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     
     let matchesFilter = true;
@@ -74,7 +74,7 @@ const Catalog = () => {
   });
 
   const addToCart = (product, selectedSize) => {
-    if (!selectedSize && product.size && product.size !== 'N/A') return alert("Por favor selecciona una talla");
+    if (!selectedSize && product.size && product.size !== 'N/A') return alert("Por favor selecciona una volumen");
 
     setCart(prev => {
       const cartId = `${product.id}-${selectedSize || 'NA'}`;
@@ -100,18 +100,18 @@ const Catalog = () => {
 
   const checkoutToWhatsApp = () => {
     const phone = "525514512919";
-    let message = `*DEPORTUX - Nuevo Pedido* 🛒\n\n`;
+    let message = `*NUBIZ - Nuevo Pedido* 🛒\n\n`;
     let total = 0;
     
     cart.forEach(item => {
       const priceText = item.type === 'order' ? 'Cotizar' : `$${item.price}`;
-      const sizeText = item.selectedSize ? ` Talla: ${item.selectedSize}` : '';
+      const sizeText = item.selectedSize ? ` Volumen: ${item.selectedSize}` : '';
       message += `• ${item.quantity}x [#${item.short_id}] ${item.name}${sizeText} - ${priceText}\n`;
       if (item.type !== 'order') total += item.price * item.quantity;
     });
 
     if (total > 0) message += `\n*TOTAL APROX:* $${total}`;
-    message += `\n\n_Por favor confirmar existencias y tallas._`;
+    message += `\n\n_Por favor confirmar existencias y volumens._`;
 
     const encoded = encodeURIComponent(message);
     window.open(`https://wa.me/${phone}?text=${encoded}`, '_blank');
@@ -124,10 +124,10 @@ const Catalog = () => {
         padding: '1rem 0', borderBottom: '1px solid var(--glass-border)'
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }} onClick={() => navigate('/')} className="pointer">
-          <img src="/logo.png" alt="DEPORTUX" style={{ height: '60px', cursor: 'pointer' }} />
+          <img src="/logo.png" alt="NUBIZ" style={{ height: '60px', cursor: 'pointer' }} />
         </div>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
-          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Elegancia Deportiva</span>
+          <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Alta Perfumería</span>
         </div>
       </header>
 
@@ -154,16 +154,22 @@ const Catalog = () => {
       {currentCategory === 'home' ? (
         <section style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '2rem', marginTop: '2rem' }}>
           <CategoryCard 
-            title="Catálogo Adultos" 
-            desc="Uniformes profesionales, stock y personalizados." 
-            img="https://images.unsplash.com/photo-1574629810360-7efbbe195018?q=80&w=2093&auto=format&fit=crop" 
-            onClick={() => navigate('/category/Adulto')} 
+            title="Dama" 
+            desc="Fragancias sofisticadas que resaltan tu esencia." 
+            img="/img/perfume_dama.webp" 
+            onClick={() => navigate('/category/Dama')} 
           />
           <CategoryCard 
-            title="Catálogo Niños" 
-            desc="Equipación oficial para las futuras estrellas del deporte." 
-            img="/kids-hero.png" 
-            onClick={() => navigate('/category/Niño')} 
+            title="Caballero" 
+            desc="Aromas exclusivos con carácter y distinción." 
+            img="/img/perfume_caballero.webp" 
+            onClick={() => navigate('/category/Caballero')} 
+          />
+          <CategoryCard 
+            title="Colección Unisex" 
+            desc="Alta perfumería perfecta para todos." 
+            img="/img/perfume_unisex.webp" 
+            onClick={() => navigate('/category/Unisex')} 
           />
         </section>
       ) : (
@@ -172,12 +178,12 @@ const Catalog = () => {
             <button 
               onClick={() => navigate('/')} 
               className="btn glass" 
-              style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--primary)' }}
+              style={{ padding: '0.5rem 1rem', display: 'flex', alignItems: 'center', gap: '0.5rem', border: '1px solid var(--primary)', color: 'white' }}
             >
               ⬅️ Regresar a Inicio
             </button>
             <h2 style={{ fontSize: '1.5rem', textTransform: 'uppercase', letterSpacing: '2px', color: 'var(--primary)' }}>
-              {currentCategory === 'Adulto' ? 'Catálogo Adultos' : 'Catálogo Niños'}
+              {currentCategory === 'Dama' ? 'Perfumes de Dama' : currentCategory === 'Caballero' ? 'Perfumes de Caballero' : 'Colección Unisex'}
             </h2>
             <div style={{ height: '1px', background: 'var(--glass-border)', flexGrow: 1 }}></div>
           </div>
@@ -186,7 +192,7 @@ const Catalog = () => {
             <div style={{ position: 'relative' }}>
               <input 
                 type="text" 
-                placeholder="🔍 Buscar uniforme por nombre..." 
+                placeholder="🔍 Buscar perfume por nombre..." 
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="glass"
@@ -273,7 +279,7 @@ const Catalog = () => {
                     <div style={{ flex: 1 }}>
                       <p style={{ fontSize: '0.85rem', fontWeight: 'bold', margin:0 }}>{item.name}</p>
                       <div style={{ fontSize: '0.75rem', opacity: 0.6 }}>
-                        {item.selectedSize && `Talla: ${item.selectedSize} | `}
+                        {item.selectedSize && `Volumen: ${item.selectedSize} | `}
                         {item.type === 'order' ? 'Cotizar' : `$${item.price}`}
                       </div>
                     </div>
@@ -329,7 +335,7 @@ const Catalog = () => {
       )}
 
       <footer style={{ marginTop: '8rem', padding: '4rem 0', textAlign: 'center', borderTop: '1px solid var(--glass-border)' }}>
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>© 2024 DEPORTUX. Envíos a todo el país.</p>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>© 2024 NUBIZ. Envíos a todo el país.</p>
       </footer>
     </div>
   );
@@ -386,7 +392,7 @@ const ProductCard = ({ product, onOpenImage, onAddToCart }) => {
 
         {needsSize && (
           <div style={{ margin: '0.8rem 0' }}>
-            <div style={{ fontSize: '0.65rem', opacity: 0.6, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona Talla:</div>
+            <div style={{ fontSize: '0.65rem', opacity: 0.6, marginBottom: '0.4rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Selecciona Volumen:</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
               {sizes.map(s => {
                 const stock = product.stock_by_size ? product.stock_by_size[s] : 0;

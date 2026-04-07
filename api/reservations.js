@@ -5,9 +5,9 @@ export default async function handler(request, response) {
   const isLocal = request.headers.host && (request.headers.host.includes('localhost') || request.headers.host.includes('127.0.0.1'));
   const pool = createPool({ connectionString });
   
-  const T_RESERVATIONS = isLocal ? 'test_reservations' : 'reservations';
-  const T_PRODUCTS = isLocal ? 'test_products' : 'products';
-  const T_CUSTOMERS = isLocal ? 'test_customers' : 'customers';
+  const T_RESERVATIONS = isLocal ? 'test_perfume_reservations' : 'perfume_reservations';
+  const T_PRODUCTS = isLocal ? 'test_perfume_products' : 'perfume_products';
+  const T_CUSTOMERS = isLocal ? 'test_perfume_customers' : 'perfume_customers';
 
   try {
     // 1. Create table

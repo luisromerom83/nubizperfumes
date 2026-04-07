@@ -5,8 +5,8 @@ export default async function handler(request, response) {
   const isLocal = request.headers.host && (request.headers.host.includes('localhost') || request.headers.host.includes('127.0.0.1'));
   const pool = createPool({ connectionString });
   
-  const T_ORDERS = isLocal ? 'test_orders' : 'orders';
-  const T_DRAFT = isLocal ? 'test_draft_order' : 'draft_order';
+  const T_ORDERS = isLocal ? 'test_perfume_orders' : 'perfume_orders';
+  const T_DRAFT = isLocal ? 'test_perfume_draft_order' : 'perfume_draft_order';
 
   try {
     // 1. Crear tablas si no existen

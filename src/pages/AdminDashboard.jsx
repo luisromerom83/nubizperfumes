@@ -16,14 +16,14 @@ const AdminDashboard = () => {
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   
   const [newProduct, setNewProduct] = useState({ 
-    name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} 
+    name: '', size: '', price: '', type: 'stock', category: 'Dama', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} 
   });
   const [orderSearchTerm, setOrderSearchTerm] = useState('');
   const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [adminFilterType, setAdminFilterType] = useState('all'); // all, favorites, stock, order
   const [editingId, setEditingId] = useState(null);
   const [currentImageURL, setCurrentImageURL] = useState('');
-  const [openCategory, setOpenCategory] = useState('Adulto');
+  const [openCategory, setOpenCategory] = useState('Dama');
   const [expandedHistory, setExpandedHistory] = useState(null);
   const [isOrderOpen, setIsOrderOpen] = useState(false);
   const [activeTab, setActiveTab] = useState('inventory');
@@ -40,15 +40,15 @@ const AdminDashboard = () => {
   const [salePaidAmount, setSalePaidAmount] = useState('');
 
   const [availableSizes, setAvailableSizes] = useState(() => {
-    const saved = localStorage.getItem('deportux_available_sizes');
-    if (!saved) return { Adulto: ['S', 'M', 'L', 'XL'], Niño: ['2', '4', '6', '8', '10', '12', '14', '16'] };
+    const saved = localStorage.getItem('nubiz_available_sizes');
+    if (!saved) return { Dama: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Caballero: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Unisex: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'] };
     const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed)) return { Adulto: parsed, Niño: [] };
+    if (Array.isArray(parsed)) return { Dama: parsed, Caballero: [], Unisex: [] };
     return parsed;
   });
 
   useEffect(() => {
-    localStorage.setItem('deportux_available_sizes', JSON.stringify(availableSizes));
+    localStorage.setItem('nubiz_available_sizes', JSON.stringify(availableSizes));
   }, [availableSizes]);
 
   useEffect(() => {
@@ -109,7 +109,7 @@ const AdminDashboard = () => {
       if (items.length > 0) setActiveOrderItems(items);
       setIsDraftLoaded(true);
     } catch(e) {
-      const cached = localStorage.getItem('deportux_draft_order');
+      const cached = localStorage.getItem('nubiz_draft_order');
       if (cached) setActiveOrderItems(JSON.parse(cached));
       setIsDraftLoaded(true);
     }
@@ -117,7 +117,7 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     if (isAuthenticated && isDraftLoaded) {
-      localStorage.setItem('deportux_draft_order', JSON.stringify(activeOrderItems));
+      localStorage.setItem('nubiz_draft_order', JSON.stringify(activeOrderItems));
       const timer = setTimeout(() => {
         fetch('/api/orders?type=draft', {
           method: 'POST',
@@ -127,7 +127,7 @@ const AdminDashboard = () => {
       }, 1000);
       return () => clearTimeout(timer);
     } else if (isDraftLoaded) {
-       localStorage.setItem('deportux_draft_order', JSON.stringify(activeOrderItems));
+       localStorage.setItem('nubiz_draft_order', JSON.stringify(activeOrderItems));
     }
   }, [activeOrderItems, isAuthenticated, isDraftLoaded]);
 
@@ -168,14 +168,14 @@ const AdminDashboard = () => {
   };
 
   const resetForm = () => {
-    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Adulto', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} });
+    setNewProduct({ name: '', size: '', price: '', type: 'stock', category: 'Dama', is_favorite: false, image: null, stock_quantity: 0, stock_by_size: {} });
     setEditingId(null); setCurrentImageURL('');
   };
 
   const handleEdit = (p) => {
     setNewProduct({ 
       name: p.name, size: p.size, price: p.price, type: p.type, 
-      category: p.category || 'Adulto', is_favorite: p.is_favorite || false, 
+      category: p.category || 'Dama', is_favorite: p.is_favorite || false, 
       image: null, stock_quantity: p.stock_quantity || 0,
       stock_by_size: p.stock_by_size || {}
     });
@@ -203,7 +203,7 @@ const AdminDashboard = () => {
       orderId: Date.now(), id: p.id, name: p.name, price: parseFloat(p.price || 0),
       sale_price: parseFloat(p.price || 0), cost: 0, 
       size: defaultSize || (p.size && !p.size.includes(',') ? p.size : ''),
-      image_url: p.image_url, quantity: 1, comment: '', category: p.category || 'Adulto',
+      image_url: p.image_url, quantity: 1, comment: '', category: p.category || 'Dama',
       is_apartado: false, customer_id: null
     }]);
     setIsOrderOpen(true);
@@ -218,7 +218,7 @@ const AdminDashboard = () => {
     
     // Auto-link to base product details without API fetch (Fast Lookup)
     if (updates.size && updates.size !== newItems[idx].size) {
-      const baseProduct = products.find(p => p.name === item.name && (p.category || 'Adulto') === (item.category || 'Adulto'));
+      const baseProduct = products.find(p => p.name === item.name && (p.category || 'Dama') === (item.category || 'Dama'));
       if (baseProduct) {
         item.id = baseProduct.id;
         item.image_url = baseProduct.image_url;
@@ -245,7 +245,7 @@ const AdminDashboard = () => {
       });
       await orderResp.json();
 
-      setActiveOrderItems([]); localStorage.removeItem('deportux_draft_order');
+      setActiveOrderItems([]); localStorage.removeItem('nubiz_draft_order');
       fetchOrdersHistory(); fetchProducts(); setIsOrderOpen(false); 
       alert('Pedido registrado en historial. No olvides "Ingresar a Inventario" cuando recibas la mercancía.');
     } catch (e) { alert(e.message); } finally { setIsUploading(false); }
@@ -403,7 +403,7 @@ const AdminDashboard = () => {
     
     setActiveSaleItems([...activeSaleItems, {
       saleId: Date.now(), id: p.id, name: p.name, price: parseFloat(p.price || 0),
-      size: defaultSize || '', image_url: p.image_url, quantity: 1, category: p.category || 'Adulto',
+      size: defaultSize || '', image_url: p.image_url, quantity: 1, category: p.category || 'Dama',
       stock_by_size: p.stock_by_size || {}
     }]);
     setIsSaleOpen(true);
@@ -431,7 +431,7 @@ const AdminDashboard = () => {
     try {
       // 1. Descontar stock para cada producto
       for (const item of activeSaleItems) {
-        if (!item.size) throw new Error(`Selecciona talla para ${item.name}`);
+        if (!item.size) throw new Error(`Selecciona volumen para ${item.name}`);
         const p = products.find(x => String(x.id) === String(item.id));
         if (p) {
           const newStock = { ...p.stock_by_size };
@@ -570,7 +570,7 @@ const AdminDashboard = () => {
     const summary = getSummaryForItems(activeOrderItems);
     const workbook = new ExcelJS.Workbook();
     const ws = workbook.addWorksheet('Pedido');
-    ws.columns = [{ header: 'Cant', key: 'q', width: 10 }, { header: 'Nombre', key: 'n', width: 40 }, { header: 'Talla', key: 's', width: 15 }, { header: 'Imagen', key: 'i', width: 20 }];
+    ws.columns = [{ header: 'Cant', key: 'q', width: 10 }, { header: 'Nombre', key: 'n', width: 40 }, { header: 'Volumen', key: 's', width: 15 }, { header: 'Imagen', key: 'i', width: 20 }];
     for (let i = 0; i < summary.length; i++) {
       const g = summary[i];
       ws.addRow({ q: g.total, n: g.name, s: g.size });
@@ -591,7 +591,7 @@ const AdminDashboard = () => {
   if (!isAuthenticated) return (
     <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', background: '#0f172a' }}>
       <div className="glass" style={{ padding: '3rem', width: '350px' }}>
-        <h2 style={{ textAlign: 'center', color: 'var(--primary)', marginBottom: '2rem' }}>DEPORTUX ADMIN</h2>
+        <h2 style={{ textAlign: 'center', color: 'var(--primary)', marginBottom: '2rem' }}>NUBIZ ADMIN</h2>
         <form onSubmit={e => { e.preventDefault(); if (loginData.user === 'admin' && loginData.password === 'Anitalavalatin4') { setIsAuthenticated(true); sessionStorage.setItem('isAdminAuthenticated', 'true'); fetchProducts(); fetchOrdersHistory(); fetchCustomers(); fetchSales(); } else alert('Credenciales incorrectas'); }} style={{ display: 'grid', gap: '1rem' }}>
           <input type="text" placeholder="Usuario" className="glass" style={{ padding: '1rem' }} onChange={e => setLoginData({...loginData, user: e.target.value})} />
           <input type="password" placeholder="Contraseña" className="glass" style={{ padding: '1rem' }} onChange={e => setLoginData({...loginData, password: e.target.value})} />
@@ -665,10 +665,10 @@ const AdminDashboard = () => {
               <section className="glass" style={{ padding: '2rem', marginBottom: '2rem' }}>
                 <h3 style={{ color: 'var(--primary)', marginBottom: '1.5rem' }}>{editingId ? 'Editar Producto' : 'Nuevo Producto'}</h3>
                 <form onSubmit={handleCatalogSubmit} className="admin-form-grid">
-                  <input type="text" placeholder="Nombre al Uniforme" required className="glass" style={{ padding: '1rem', width: '100%' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
+                  <input type="text" placeholder="Nombre al perfume" required className="glass" style={{ padding: '1rem', width: '100%' }} value={newProduct.name} onChange={e => setNewProduct({...newProduct, name: e.target.value})} />
                   <div style={{ margin: '1rem 0' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.8rem' }}>
-                      <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--primary)' }}>Tallas y Existencias:</label>
+                      <label style={{ fontSize: '0.9rem', fontWeight: 'bold', color: 'var(--primary)' }}>Volumens y Existencias:</label>
                       <button type="button" onClick={() => setNewProduct({...newProduct, size: '', stock_by_size: {}})} style={{ background: 'none', border: 'none', color: '#f87171', fontSize: '0.75rem', cursor: 'pointer' }}>Borrar todas</button>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))', gap: '1rem' }}>
@@ -716,8 +716,9 @@ const AdminDashboard = () => {
                       value={newProduct.category} 
                       onChange={e => setNewProduct({...newProduct, category: e.target.value, size: '', stock_by_size: {}})}
                     >
-                      <option value="Adulto">Adulto</option>
-                      <option value="Niño">Niño</option>
+                      <option value="Dama">Dama</option>
+                      <option value="Caballero">Caballero</option>
+                      <option value="Unisex">Unisex</option>
                     </select>
                   </div>
                   <div className="admin-form-row">
@@ -765,11 +766,11 @@ const AdminDashboard = () => {
                 </div>
               </div>
 
-              {['Niño', 'Adulto'].map(cat => (
+              {['Caballero', 'Dama', 'Unisex'].map(cat => (
                 <div key={cat} style={{ marginBottom: '1.5rem' }}>
                   <div onClick={() => setOpenCategory(openCategory === cat ? null : cat)} style={{ display: 'flex', justifyContent: 'space-between', padding: '1rem', background: 'rgba(255,255,255,0.05)', borderRadius: '12px', cursor: 'pointer', marginBottom: '1rem' }}>
                     <h4 style={{ margin: 0 }}>{cat.toUpperCase()} ({products.filter(p => {
-                      const matchesCategory = (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat);
+                      const matchesCategory = (cat === 'Dama' ? (!p.category || p.category === 'Dama') : p.category === cat);
                       const matchesSearch = p.name.toLowerCase().includes(adminSearchQuery.toLowerCase());
                       let matchesFilter = true;
                       if (adminFilterType === 'favorites') matchesFilter = p.is_favorite;
@@ -782,7 +783,7 @@ const AdminDashboard = () => {
                   {(openCategory === cat || adminSearchQuery !== '' || adminFilterType !== 'all') && (
                     <div className="admin-grid">
                       {products.filter(p => {
-                        const matchesCategory = (cat === 'Adulto' ? (!p.category || p.category === 'Adulto') : p.category === cat);
+                        const matchesCategory = (cat === 'Dama' ? (!p.category || p.category === 'Dama') : p.category === cat);
                         const matchesSearch = p.name.toLowerCase().includes(adminSearchQuery.toLowerCase());
                         let matchesFilter = true;
                         if (adminFilterType === 'favorites') matchesFilter = p.is_favorite;
@@ -843,7 +844,7 @@ const AdminDashboard = () => {
                             <img src={r.image_url} style={{ width: '70px', height: '70px', objectFit: 'cover', borderRadius: '8px' }} alt="" />
                             <div style={{ flex: 1 }}>
                               <div style={{ fontWeight: 'bold' }}>{r.product_name}</div>
-                              <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>Talla: {r.product_size} | Cant: {r.quantity}</div>
+                              <div style={{ fontSize: '0.8rem', opacity: 0.6 }}>Volumen: {r.product_size} | Cant: {r.quantity}</div>
                               <div style={{ marginTop: '5px', fontSize: '0.9rem' }}>
                                 Total: <strong>${(r.price_at_reservation * r.quantity).toFixed(0)}</strong> | 
                                 Pagado: <span style={{ color: '#4ade80' }}>${parseFloat(r.paid_amount || 0).toFixed(0)}</span>
@@ -1100,18 +1101,18 @@ const AdminDashboard = () => {
         )}
         {activeTab === 'settings' && (
           <div className="glass" style={{ padding: '2rem', maxWidth: '1000px', margin: '0 auto' }}>
-            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)', marginBottom: '2rem' }}>⚙️ Configuración de Tallas</h3>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--primary)', marginBottom: '2rem' }}>⚙️ Configuración de Volumens</h3>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '2.5rem' }}>
               {/* ADULTO */}
               <section>
-                <h4 style={{ marginBottom: '1rem', color: '#60a5fa' }}>👨 Tallas Adulto</h4>
+                <h4 style={{ marginBottom: '1rem', color: '#60a5fa' }}>👨 Volumens Dama</h4>
                 <div className="size-selector-grid" style={{ marginBottom: '1.5rem' }}>
-                  {(availableSizes.Adulto || []).map(size => (
+                  {(availableSizes.Dama || []).map(size => (
                     <div key={`a-${size}`} style={{ position: 'relative', display: 'inline-block' }}>
                       <span className="size-tag active" style={{ paddingRight: '2.5rem' }}>{size}</span>
                       <button 
-                        onClick={() => setAvailableSizes(prev => ({ ...prev, Adulto: prev.Adulto.filter(s => s !== size) }))}
+                        onClick={() => setAvailableSizes(prev => ({ ...prev, Dama: prev.Dama.filter(s => s !== size) }))}
                         style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'white', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
                       >
                         ×
@@ -1123,8 +1124,8 @@ const AdminDashboard = () => {
                   onSubmit={e => {
                     e.preventDefault();
                     const val = e.target.newSize.value.trim().toUpperCase();
-                    if (val && !availableSizes.Adulto.includes(val)) {
-                      setAvailableSizes(prev => ({ ...prev, Adulto: [...prev.Adulto, val] }));
+                    if (val && !availableSizes.Dama.includes(val)) {
+                      setAvailableSizes(prev => ({ ...prev, Dama: [...prev.Dama, val] }));
                       e.target.newSize.value = '';
                     }
                   }}
@@ -1137,13 +1138,13 @@ const AdminDashboard = () => {
 
               {/* NIÑO */}
               <section>
-                <h4 style={{ marginBottom: '1rem', color: '#f472b6' }}>🧒 Tallas Niño</h4>
+                <h4 style={{ marginBottom: '1rem', color: '#f472b6' }}>🧒 Volumens Caballero</h4>
                 <div className="size-selector-grid" style={{ marginBottom: '1.5rem' }}>
-                  {(availableSizes.Niño || []).map(size => (
+                  {(availableSizes.Caballero || []).map(size => (
                     <div key={`n-${size}`} style={{ position: 'relative', display: 'inline-block' }}>
                       <span className="size-tag active" style={{ paddingRight: '2.5rem', background: '#f472b6', borderColor: '#f472b6' }}>{size}</span>
                       <button 
-                        onClick={() => setAvailableSizes(prev => ({ ...prev, Niño: prev.Niño.filter(s => s !== size) }))}
+                        onClick={() => setAvailableSizes(prev => ({ ...prev, Caballero: prev.Caballero.filter(s => s !== size) }))}
                         style={{ position: 'absolute', right: '5px', top: '50%', transform: 'translateY(-50%)', background: 'rgba(0,0,0,0.3)', border: 'none', color: 'white', borderRadius: '50%', width: '20px', height: '20px', fontSize: '12px', cursor: 'pointer', display: 'flex', justifyContent: 'center', alignItems: 'center' }}
                       >
                         ×
@@ -1155,8 +1156,8 @@ const AdminDashboard = () => {
                   onSubmit={e => {
                     e.preventDefault();
                     const val = e.target.newSize.value.trim().toUpperCase();
-                    if (val && !availableSizes.Niño.includes(val)) {
-                      setAvailableSizes(prev => ({ ...prev, Niño: [...prev.Niño, val] }));
+                    if (val && !availableSizes.Caballero.includes(val)) {
+                      setAvailableSizes(prev => ({ ...prev, Caballero: [...prev.Caballero, val] }));
                       e.target.newSize.value = '';
                     }
                   }}
@@ -1168,7 +1169,7 @@ const AdminDashboard = () => {
               </section>
 
               <div style={{ padding: '1rem', background: 'rgba(239, 129, 30, 0.1)', border: '1px solid var(--primary)', borderRadius: '12px', fontSize: '0.85rem', marginTop: '2.5rem' }}>
-                <strong>Nota:</strong> Al eliminar una talla de aquí, no se borrará de los productos existentes, pero ya no aparecerá como opción para nuevos productos de esa categoría.
+                <strong>Nota:</strong> Al eliminar una volumen de aquí, no se borrará de los productos existentes, pero ya no aparecerá como opción para nuevos productos de esa categoría.
               </div>
             </div>
           </div>
@@ -1195,14 +1196,14 @@ const AdminDashboard = () => {
               
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', alignItems: 'center' }}>
                 <div>
-                  <label style={{ fontSize: '0.65rem', opacity: 0.6, display: 'block' }}>Talla:</label>
+                  <label style={{ fontSize: '0.65rem', opacity: 0.6, display: 'block' }}>Volumen:</label>
                   <select 
                     className="glass" 
                     style={{ width: '100%', padding: '0.3rem', background: '#0f172a' }} 
                     value={item.size} 
                     onChange={e => updateSaleItem(item.saleId, { size: e.target.value })}
                   >
-                    <option value="">Talla</option>
+                    <option value="">Volumen</option>
                     {Object.keys(item.stock_by_size).filter(s => item.stock_by_size[s] > 0).map(s => (
                       <option key={s} value={s}>{s} ({item.stock_by_size[s]})</option>
                     ))}
@@ -1308,7 +1309,7 @@ const AdminDashboard = () => {
               <div style={{ display: 'grid', gridTemplateColumns: '60px 1fr 1fr', gap: '0.5rem' }}>
                 <input type="number" className="glass" style={{ padding: '0.3rem' }} value={item.quantity} onChange={e => updateOrderItem(item.orderId, { quantity: parseInt(e.target.value) })} />
                 <select className="glass" style={{ padding: '0.3rem', background: '#0f172a', color: 'white' }} value={item.size} onChange={e => updateOrderItem(item.orderId, { size: e.target.value })}>
-                  <option value="">Talla</option>
+                  <option value="">Volumen</option>
                   {(availableSizes[item.category] || []).map(s => <option key={`${item.category}-${s}`} value={s}>{s}</option>)}
                   {item.size && !availableSizes[item.category]?.includes(item.size) && !item.size.includes(',') && (
                     <option value={item.size}>{item.size}</option>

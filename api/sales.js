@@ -5,8 +5,8 @@ export default async function handler(request, response) {
   const isLocal = request.headers.host && (request.headers.host.includes('localhost') || request.headers.host.includes('127.0.0.1'));
   const pool = createPool({ connectionString });
   
-  const T_SALES = isLocal ? 'test_sales' : 'sales';
-  const T_CUSTOMERS = isLocal ? 'test_customers' : 'customers';
+  const T_SALES = isLocal ? 'test_perfume_sales' : 'perfume_sales';
+  const T_CUSTOMERS = isLocal ? 'test_perfume_customers' : 'perfume_customers';
 
   try {
     // 1. Create table
@@ -91,14 +91,14 @@ export default async function handler(request, response) {
       for (const item of items) {
         if (item.id && item.size) {
           // Obtener stock actual para recalcular total
-          const { rows: prodRows } = await pool.query(`SELECT * FROM ${T_SALES.includes('test') ? 'test_products' : 'products'} WHERE id = $1`, [item.id]);
+          const { rows: prodRows } = await pool.query(`SELECT * FROM ${T_SALES.includes('test') ? 'test_perfume_products' : 'perfume_products'} WHERE id = $1`, [item.id]);
           if (prodRows.length > 0) {
             const p = prodRows[0];
             const newStock = { ...p.stock_by_size };
             newStock[item.size] = (parseInt(newStock[item.size]) || 0) + parseInt(item.quantity);
             const newTotal = Object.values(newStock).reduce((a, b) => a + (parseInt(b) || 0), 0);
             
-            await pool.query(`UPDATE ${T_SALES.includes('test') ? 'test_products' : 'products'} SET stock_by_size = $1, stock_quantity = $2 WHERE id = $3`, [JSON.stringify(newStock), newTotal, item.id]);
+            await pool.query(`UPDATE ${T_SALES.includes('test') ? 'test_perfume_products' : 'perfume_products'} SET stock_by_size = $1, stock_quantity = $2 WHERE id = $3`, [JSON.stringify(newStock), newTotal, item.id]);
           }
         }
       }

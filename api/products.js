@@ -6,7 +6,7 @@ export default async function handler(request, response) {
   const pool = createPool({ connectionString });
   
   // Dynamic table names for cloud isolation
-  const TABLE = isLocal ? 'test_products' : 'products';
+  const TABLE = isLocal ? 'test_perfume_products' : 'perfume_products';
 
   try {
     // 1. Crear/Actualizar Tabla (Test o Producicón)
@@ -19,14 +19,14 @@ export default async function handler(request, response) {
         price DECIMAL(10, 2) NOT NULL,
         image_url TEXT NOT NULL,
         type VARCHAR(50) DEFAULT 'stock',
-        category VARCHAR(50) DEFAULT 'Adulto',
+        category VARCHAR(50) DEFAULT 'Dama',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     
     // Aseguramos columnas necesarias
     try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS type VARCHAR(50) DEFAULT 'stock';`); } catch (e) {}
-    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Adulto';`); } catch (e) {}
+    try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS category VARCHAR(50) DEFAULT 'Dama';`); } catch (e) {}
     try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS is_favorite BOOLEAN DEFAULT FALSE;`); } catch (e) {}
     try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS short_id VARCHAR(10);`); } catch (e) {}
     try { await pool.query(`ALTER TABLE ${TABLE} ADD COLUMN IF NOT EXISTS stock_quantity INTEGER DEFAULT 0;`); } catch (e) {}
@@ -52,7 +52,7 @@ export default async function handler(request, response) {
       const { name, size, price, imageURL, type, category, is_favorite, stock_quantity, stock_by_size, find_existing } = request.body;
       
       // Buscar si ya existe el producto BASE (mismo nombre y categoría)
-      const { rows: existing } = await pool.query(`SELECT * FROM ${TABLE} WHERE name = $1 AND category = $2 LIMIT 1;`, [name, category || 'Adulto']);
+      const { rows: existing } = await pool.query(`SELECT * FROM ${TABLE} WHERE name = $1 AND category = $2 LIMIT 1;`, [name, category || 'Dama']);
       
       if (existing.length > 0) {
         const prod = existing[0];
@@ -78,7 +78,7 @@ export default async function handler(request, response) {
         INSERT INTO ${TABLE} (name, size, price, image_url, type, category, is_favorite, stock_quantity, stock_by_size)
         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING *;
-      `, [name, size, price, imageURL, type || 'stock', category || 'Adulto', is_favorite || false, stock_quantity || 0, JSON.stringify(stock_by_size || {})]);
+      `, [name, size, price, imageURL, type || 'stock', category || 'Dama', is_favorite || false, stock_quantity || 0, JSON.stringify(stock_by_size || {})]);
       
       const newProd = result.rows[0];
       const shortId = newProd.id.toString().padStart(4, '0');
