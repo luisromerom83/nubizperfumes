@@ -40,10 +40,12 @@ const AdminDashboard = () => {
   const [salePaidAmount, setSalePaidAmount] = useState('');
 
   const [availableSizes, setAvailableSizes] = useState(() => {
+    const defaultSizes = { Dama: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Caballero: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Unisex: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'] };
     const saved = localStorage.getItem('nubiz_available_sizes');
-    if (!saved) return { Dama: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Caballero: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Unisex: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'] };
+    if (!saved) return defaultSizes;
     const parsed = JSON.parse(saved);
-    if (Array.isArray(parsed)) return { Dama: parsed, Caballero: [], Unisex: [] };
+    // Force reset for perfume migration if old sports sizes are present or Unisex is missing
+    if (Array.isArray(parsed) || !parsed.Unisex || parsed.Dama?.includes('S') || parsed.Caballero?.includes('2')) return defaultSizes;
     return parsed;
   });
 
@@ -140,6 +142,10 @@ const AdminDashboard = () => {
 
   const handleCatalogSubmit = async (e) => {
     e.preventDefault();
+    if (newProduct.price === '' || newProduct.price === null || newProduct.price === undefined) {
+      alert('¡Candado de seguridad! Es obligatorio ingresar un precio (puede ser 0).');
+      return;
+    }
     setIsUploading(true);
     const totalStock = Object.values(newProduct.stock_by_size).reduce((a, b) => a + (parseInt(b) || 0), 0);
     let imageURL = currentImageURL;
@@ -722,7 +728,7 @@ const AdminDashboard = () => {
                     </select>
                   </div>
                   <div className="admin-form-row">
-                    <input type="number" placeholder="Precio ($)" className="glass" style={{ padding: '1rem', width: '100%' }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
+                    <input type="number" required placeholder="Precio ($)" className="glass" style={{ padding: '1rem', width: '100%' }} value={newProduct.price} onChange={e => setNewProduct({...newProduct, price: e.target.value})} />
                     <input type="file" className="glass" style={{ padding: '0.8rem', width: '100%' }} onChange={e => setNewProduct({...newProduct, image: e.target.files[0]})} />
                   </div>
                   <button type="submit" className="btn btn-primary" style={{ padding: '1.1rem', width: '100%', fontSize: '1rem' }}>{editingId ? 'Actualizar' : 'Guardar'}</button>
