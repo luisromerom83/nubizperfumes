@@ -39,6 +39,21 @@ const AdminDashboard = () => {
   const [saleCustomerId, setSaleCustomerId] = useState('');
   const [salePaidAmount, setSalePaidAmount] = useState('');
 
+  const [isLightMode, setIsLightMode] = useState(() => {
+    const saved = localStorage.getItem('nubiz_theme');
+    return saved ? saved === 'light' : true; // Default to true
+  });
+
+  useEffect(() => {
+    if (isLightMode) {
+      document.body.classList.add('light-theme');
+      localStorage.setItem('nubiz_theme', 'light');
+    } else {
+      document.body.classList.remove('light-theme');
+      localStorage.setItem('nubiz_theme', 'dark');
+    }
+  }, [isLightMode]);
+
   const [availableSizes, setAvailableSizes] = useState(() => {
     const defaultSizes = { Dama: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Caballero: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'], Unisex: ['30ml', '50ml', '80ml', '100ml', '150ml', '200ml'] };
     const saved = localStorage.getItem('nubiz_available_sizes');
@@ -645,6 +660,9 @@ const AdminDashboard = () => {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem' }}>
         <img src="/logo.png" alt="Logo" style={{ height: '60px' }} />
         <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+          <button onClick={() => setIsLightMode(!isLightMode)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            {isLightMode ? '🌙' : '☀️'}
+          </button>
           <Link to="/" className="btn glass">Ver Tienda</Link>
           <button onClick={() => { sessionStorage.clear(); window.location.reload(); }} className="btn" style={{ background: '#ef4444' }}>Cerrar Sesión</button>
         </div>

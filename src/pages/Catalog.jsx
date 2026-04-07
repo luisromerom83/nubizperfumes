@@ -15,6 +15,21 @@ const Catalog = () => {
   const navigate = useNavigate();
   const currentCategory = catName || 'home';
 
+  const [isLightMode, setIsLightMode] = useState(() => {
+    const saved = localStorage.getItem('nubiz_theme');
+    return saved ? saved === 'light' : true; // Default to true (light mode)
+  });
+
+  useEffect(() => {
+    if (isLightMode) {
+      document.body.classList.add('light-theme');
+      localStorage.setItem('nubiz_theme', 'light');
+    } else {
+      document.body.classList.remove('light-theme');
+      localStorage.setItem('nubiz_theme', 'dark');
+    }
+  }, [isLightMode]);
+
   useEffect(() => {
     fetchProducts();
   }, []);
@@ -128,6 +143,9 @@ const Catalog = () => {
           <img src="/logo.png" alt="NUBIZ" style={{ height: '60px', cursor: 'pointer' }} />
         </div>
         <div style={{ display: 'flex', gap: '1.5rem', alignItems: 'center' }}>
+          <button onClick={() => setIsLightMode(!isLightMode)} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>
+            {isLightMode ? '🌙' : '☀️'}
+          </button>
           <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Alta Perfumería</span>
         </div>
       </header>
