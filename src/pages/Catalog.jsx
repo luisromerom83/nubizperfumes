@@ -100,7 +100,7 @@ const Catalog = () => {
   };
 
   const checkoutToWhatsApp = () => {
-    const phone = "525514512919";
+    const phone = "525561664192";
     let message = `*NUBIZ - Nuevo Pedido* 🛒\n\n`;
     let total = 0;
     
@@ -134,15 +134,10 @@ const Catalog = () => {
 
       <section style={{ marginBottom: '3rem', textAlign: 'center' }}>
         <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap', marginBottom: '1.5rem' }}>
-          <a href="https://wa.me/525514512919" target="_blank" rel="noreferrer" className="btn" style={{ 
+          <a href="https://wa.me/525561664192" target="_blank" rel="noreferrer" className="btn" style={{ 
             background: '#25D366', color: 'white', fontSize: '0.75rem', padding: '0.5rem 1rem', borderRadius: '99px' 
           }}>
-            📲 WhatsApp 5514512919
-          </a>
-          <a href="https://wa.me/522872360877" target="_blank" rel="noreferrer" className="btn" style={{ 
-            background: '#25D366', color: 'white', fontSize: '0.75rem', padding: '0.5rem 1rem', borderRadius: '99px' 
-          }}>
-            📲 WhatsApp 2872360877
+            📲 Contáctanos: 5561664192
           </a>
         </div>
         <h1 style={{ fontSize: 'clamp(1.8rem, 5vw, 3rem)', marginBottom: '0.5rem', lineHeight: '1.1' }}>
