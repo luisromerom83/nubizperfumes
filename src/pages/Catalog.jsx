@@ -55,7 +55,8 @@ const Catalog = () => {
 
   const filteredProducts = products.filter(p => {
     const matchesCategory = (currentCategory === 'Dama' && (p.category === 'Dama' || !p.category)) || 
-                            (currentCategory === 'Caballero' && p.category === 'Caballero');
+                            (currentCategory === 'Caballero' && p.category === 'Caballero') ||
+                            (currentCategory === 'Unisex' && p.category === 'Unisex');
     const matchesSearch = p.name.toLowerCase().includes(searchQuery.toLowerCase());
     
     let matchesFilter = true;
